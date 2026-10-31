@@ -145,6 +145,9 @@
   details.compras .t { flex: 1; min-width: 0; }
   details.compras small { color: var(--muted); }
   label.btn, .campo label.btn { display: block; text-align: center; cursor: pointer; font-size: 15px; color: var(--ink); margin: 8px 0 0; }
+  details.compras label { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  details.compras label input { width: 20px; height: 20px; flex: none; margin: 2px 0 0; accent-color: var(--acc); }
+  .bloco { margin: 12px 0 4px; font-weight: 600; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -161,7 +164,7 @@
   <button data-aba="transacoes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg><span>Transações</span></button>
   <button class="mais" id="btnNovo" aria-label="Novo lançamento">+</button>
   <button disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Resumo</span></button>
-  <button disabled><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span>Mais</span></button>
+  <button id="btnMais"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span>Mais</span></button>
 </nav>
 
 <div class="fundo" id="fundo"><div class="folha" id="folha"></div></div>
@@ -648,6 +651,142 @@ function previaFatura(i, linhas, arquivo) {
   };
 }
 
+// ---------- PDF (fatura e extrato) ----------
+
+// O pdf.js é carregado só quando precisa e lê o arquivo no próprio aparelho; senha e arquivo não vão para o servidor.
+let pdfjs = null;
+async function abrirPDF(dados, senha) {
+  if (!pdfjs) {
+    pdfjs = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+  }
+  const doc = await pdfjs.getDocument({ data: dados, password: senha }).promise;
+  const itens = [];
+  for (let p = 1; p <= doc.numPages; p++) {
+    const c = await (await doc.getPage(p)).getTextContent();
+    c.items.forEach(it => { if (it.str.trim()) itens.push({ p, x: it.transform[4], y: it.transform[5], s: it.str }); });
+  }
+  return itens;
+}
+
+// Abre o PDF; se pedir senha, pergunta e tenta de novo. seguir(itens) recebe o texto; voltar() é o botão Voltar.
+async function lerPDFcomSenha(f, senha, seguir, voltar) {
+  toast('Lendo o PDF…');
+  try { seguir(await abrirPDF(new Uint8Array(await f.arrayBuffer()), senha)); }
+  catch (err) {
+    if (!err || err.name !== 'PasswordException') return erro(err);
+    abrirFolha(`
+      <h3>PDF com senha</h3>
+      <div class="sub">${esc(f.name)}</div>
+      ${err.code === 2 ? '<div class="alerta">Senha incorreta.</div>' : ''}
+      <div class="campo"><label>Senha do PDF. Ela não é gravada em lugar nenhum.</label><input id="senhaPdf" type="password" autocomplete="off"></div>
+      <button class="btn pri" id="bSenha">Abrir</button>
+      <button class="btn" id="bVoltar">Voltar</button>`);
+    $('bVoltar').onclick = voltar;
+    $('bSenha').onclick = e => { e.target.disabled = true; lerPDFcomSenha(f, $('senhaPdf').value, seguir, voltar); };
+  }
+}
+
+// Junta os pedaços de texto em linhas (mesma página e mesma altura), da esquerda para a direita.
+function linhasPDF(itens) {
+  const L = [];
+  itens.slice().sort((a, b) => a.p - b.p || b.y - a.y || a.x - b.x).forEach(it => {
+    const l = L[L.length - 1];
+    if (l && l.p === it.p && Math.abs(l.y - it.y) < 2) l.itens.push(it); else L.push({ p: it.p, y: it.y, itens: [it] });
+  });
+  L.forEach(l => { l.itens.sort((a, b) => a.x - b.x); l.texto = l.itens.map(i => i.s).join(' ').replace(/\s+/g, ' ').trim(); });
+  return L;
+}
+
+// ---------- extrato do C6 ----------
+
+// Extrato da conta exportado pelo app do C6: data da transação, data de processamento, tipo, descrição e valor por linha.
+// Confere a soma das entradas e saídas com o cabeçalho de cada mês do extrato.
+function lerExtratoC6(itens) {
+  const L = linhasPDF(itens);
+  const tudo = L.map(l => l.texto).join('\n');
+  if (!/C6 Bank/i.test(tudo) || !/Extrato da conta/i.test(tudo)) throw new Error('Não reconheci o PDF. Use o extrato da conta exportado pelo app do C6.');
+  const per = tudo.match(/(\d{2})\/(\d{2})\/(\d{4}) a (\d{2})\/(\d{2})\/(\d{4})/);
+  if (!per) throw new Error('Não achei o período do extrato.');
+  const ini = `${per[3]}-${per[2]}-${per[1]}`, fim = `${per[6]}-${per[5]}-${per[4]}`;
+  const ano = mm => (Number(mm) >= Number(ini.slice(5, 7)) ? ini.slice(0, 4) : fim.slice(0, 4));
+  const linhas = [];
+  for (const l of L) {
+    const s = l.itens.map(i => i.s.trim());
+    if (s.length < 5 || !/^\d{2}\/\d{2}$/.test(s[0]) || !/^-?R\$/.test(s[s.length - 1])) continue;
+    const [d, mm] = s[0].split('/');
+    linhas.push({ data: `${ano(mm)}-${mm}-${d}`, tipo: s[2], descricao: s.slice(3, -1).join(' '), valor: numero(s[s.length - 1]) });
+  }
+  const cab = [...tudo.matchAll(/Entradas:\s*R\$\s*([\d.,]+)\s*•\s*Saídas:\s*R\$\s*([\d.,]+)/g)];
+  const soma = f => Math.round(linhas.filter(f).reduce((t, l) => t + l.valor, 0) * 100) / 100;
+  const ent = soma(l => l.valor > 0), sai = -soma(l => l.valor < 0);
+  const confere = cab.length > 0 && Math.abs(cab.reduce((t, c) => t + numero(c[1]), 0) - ent) < 0.01 && Math.abs(cab.reduce((t, c) => t + numero(c[2]), 0) - sai) < 0.01;
+  return { ini, fim, linhas, ent, sai, confere };
+}
+
+// Casa cada linha do extrato com um lançamento do mesmo valor, despesa com saída e receita em reais com entrada,
+// com vencimento a até 20 dias da data; vale o mais próximo e cada lançamento casa uma vez só.
+const diasEntre = (a, b) => Math.abs(new Date(a + 'T12:00:00') - new Date(b + 'T12:00:00')) / 864e5;
+function casarExtrato(linhas) {
+  const usados = new Set();
+  return linhas.map(e => {
+    const tipo = e.valor < 0 ? 'Despesa' : 'Receita';
+    const cand = st.itens.filter(i => i.tipo === tipo && i.moeda !== 'USD' && !usados.has(i.id) && /^\d{4}-\d{2}-\d{2}/.test(i.vencimento || '')
+      && Math.abs(Number(i.valor_brl) - Math.abs(e.valor)) < 0.011 && diasEntre(i.vencimento, e.data) <= 20)
+      .sort((a, b) => diasEntre(a.vencimento, e.data) - diasEntre(b.vencimento, e.data));
+    if (cand[0]) usados.add(cand[0].id);
+    return { e, i: cand[0] || null };
+  });
+}
+
+function mais() {
+  abrirFolha(`
+    <h3>Mais</h3>
+    <div class="campo"><label>Extrato da conta do C6 em PDF, exportado pelo app do banco. O app compara com os lançamentos e marca como pago o que bater, com a data do extrato.</label>
+      <label class="btn">Importar extrato do C6<input type="file" id="arqExtrato" accept=".pdf,application/pdf" hidden></label></div>
+    <button class="btn" onclick="fecharFolha()">Fechar</button>`);
+  $('arqExtrato').onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    lerPDFcomSenha(f, '', itens => previaExtrato(lerExtratoC6(itens), f.name), mais);
+  };
+}
+
+function previaExtrato(x, arquivo) {
+  const pares = casarExtrato(x.linhas);
+  const marcar = pares.filter(p => p.i && !p.i.pago), jaPagos = pares.filter(p => p.i && p.i.pago), sem = pares.filter(p => !p.i);
+  const linhaE = e => `<span class="d">${dataBR(e.data)}</span><span class="t">${esc(e.descricao)}<br><small>${esc(e.tipo)}</small></span><b class="${e.valor > 0 ? 'verde' : ''}">${m(e.valor)}</b>`;
+  const linhaPar = (p, k) => `<label><input type="checkbox" data-k="${k}" checked><span class="t"><b>${esc(p.i.item)}</b> <small>${esc(nomeMes(p.i.mes))}</small><br><small>${dataBR(p.e.data)} ${esc(p.e.descricao)}</small></span><b>${m(Math.abs(p.e.valor))}</b></label>`;
+  abrirFolha(`
+    <h3>Extrato C6</h3>
+    <div class="sub">${dataBR(x.ini)}/${x.ini.slice(0, 4)} a ${dataBR(x.fim)}/${x.fim.slice(0, 4)}</div>
+    <div class="dados">
+      <span>Arquivo</span><span>${esc(arquivo)}</span>
+      <span>Linhas</span><span>${x.linhas.length}</span>
+      <span>Entradas</span><span class="verde">${brl(x.ent)}</span>
+      <span>Saídas</span><span class="vermelho">${brl(-x.sai)}</span>
+    </div>
+    ${x.confere ? '<div class="aviso">Entradas e saídas batem com o cabeçalho do extrato.</div>' : '<div class="alerta">As somas não batem com o cabeçalho do extrato. Confira antes de marcar.</div>'}
+    <div class="bloco">A marcar como pago (${marcar.length})</div>
+    ${marcar.length ? `<details class="compras" open><summary>Desmarque o que não for o mesmo pagamento</summary>${marcar.map(p => linhaPar(p, pares.indexOf(p))).join('')}</details>` : '<div class="aviso">Nenhum lançamento em aberto bateu com o extrato.</div>'}
+    <div class="bloco">Já estavam pagos (${jaPagos.length})</div>
+    ${jaPagos.length ? `<details class="compras"><summary>Ver</summary>${jaPagos.map(p => `<div><span class="d">${dataBR(p.e.data)}</span><span class="t">${esc(p.i.item)} <small>${esc(nomeMes(p.i.mes))}</small><br><small>${esc(p.e.descricao)}${p.i.pago_em && p.i.pago_em !== p.e.data ? ', marcado pago em ' + dataBR(p.i.pago_em) : ''}</small></span><b>${m(Math.abs(p.e.valor))}</b></div>`).join('')}</details>` : ''}
+    <div class="bloco">Não identificados (${sem.length})</div>
+    ${sem.length ? `<details class="compras"><summary>Ver as ${sem.length} linhas sem lançamento</summary>${sem.map(p => `<div>${linhaE(p.e)}</div>`).join('')}</details>` : ''}
+    <button class="btn pri" id="bConc" ${marcar.length ? '' : 'disabled'}>Marcar como pago</button>
+    <button class="btn" id="bVoltar">Voltar</button>`);
+  $('bVoltar').onclick = mais;
+  $('bConc').onclick = async e => {
+    const lista = [...document.querySelectorAll('[data-k]:checked')].map(c => pares[Number(c.dataset.k)]).map(p => ({ id: p.i.id, data: p.e.data }));
+    if (!lista.length) return toast('Nada marcado');
+    e.target.disabled = true; e.target.textContent = 'Gravando…';
+    try {
+      const novos = await call('conciliarExtrato', lista, arquivo);
+      novos.forEach(n => { const k = st.itens.findIndex(i => i.id === n.id); if (k >= 0) st.itens[k] = n; });
+      render(); fecharFolha(); toast(`${novos.length} ${novos.length === 1 ? 'lançamento marcado' : 'lançamentos marcados'} como pago`);
+    } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Marcar como pago'; }
+  };
+}
+
 function novo() {
   const hojeNoMes = st.hoje.slice(0, 7) === st.mes ? st.hoje : st.mes + '-01';
   const opts = (lista, sel) => lista.map(v => `<option ${v === sel ? 'selected' : ''}>${esc(v)}</option>`).join('');
@@ -700,6 +839,7 @@ function novo() {
 }
 
 $('btnNovo').onclick = novo;
+$('btnMais').onclick = mais;
 document.querySelectorAll('[data-aba]').forEach(b => b.onclick = () => { st.aba = b.dataset.aba; render(); window.scrollTo(0, 0); });
 $('ant').onclick = () => abrirMes(st.meses[st.meses.indexOf(st.mes) - 1]);
 $('prox').onclick = () => abrirMes(st.meses[st.meses.indexOf(st.mes) + 1]);
