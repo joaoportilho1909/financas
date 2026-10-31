@@ -494,8 +494,11 @@ function detalhe(id) {
   };
   if ($('arqFatura')) $('arqFatura').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
-    try { previaFatura(i, lerFaturaNubank(await f.text()), f.name); }
-    catch (err) { erro(err); e.target.value = ''; }
+    try {
+      if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf')
+        lerPDFcomSenha(f, '', itens => previaFatura(i, lerFaturaPDF(itens, i.vencimento || i.mes + '-28'), f.name), () => detalhe(i.id));
+      else previaFatura(i, { banco: 'Nubank', linhas: lerFaturaNubank(await f.text()) }, f.name);
+    } catch (err) { erro(err); e.target.value = ''; }
   };
   if ($('bExcluir')) $('bExcluir').onclick = async e => {
     if (e.target.dataset.conf !== '1') { e.target.dataset.conf = '1'; e.target.textContent = 'Toque de novo para excluir'; return; }
@@ -589,7 +592,7 @@ const comprasDe = id => (st.compras || []).filter(c => c.lanc_id === id);
 // Soma por categoria: compras, IOF e estornos; pagamento antecipado fica de fora.
 function gradeCategorias(cs) {
   const g = {};
-  cs.filter(c => c.tipo !== 'pagamento').forEach(c => { const k = c.categoria || 'Outros'; g[k] = (g[k] || 0) + Number(c.valor); });
+  cs.filter(c => c.tipo !== 'pagamento' && c.tipo !== 'saldo').forEach(c => { const k = c.categoria || 'Outros'; g[k] = (g[k] || 0) + Number(c.valor); });
   return Object.entries(g).filter(c => Math.abs(c[1]) >= 0.005).sort((a, b) => b[1] - a[1]);
 }
 function htmlGrade(cats) {
@@ -597,7 +600,7 @@ function htmlGrade(cats) {
   return `<div class="grade">${cats.map(([c, v]) => `<div class="g">${icone({ categoria: c })}<span class="nome">${esc(c)}</span><b>${m(v)}</b><span class="barra-cat"><i style="width:${Math.max(0, 100 * v / max).toFixed(1)}%"></i></span></div>`).join('')}</div>`;
 }
 function listaCompras(cs) {
-  return cs.slice().sort((a, b) => b.data.localeCompare(a.data)).map(c => `<div><span class="d">${dataBR(c.data)}</span><span class="t">${esc(c.descricao)}${c.parcela ? ' <small>' + esc(c.parcela) + '</small>' : ''}<br><small>${esc(c.categoria || 'pagamento')}</small></span><b>${m(c.valor)}</b></div>`).join('');
+  return cs.slice().sort((a, b) => b.data.localeCompare(a.data)).map(c => `<div><span class="d">${dataBR(c.data)}</span><span class="t">${esc(c.descricao)}${c.parcela ? ' <small>' + esc(c.parcela) + '</small>' : ''}<br><small>${esc(c.categoria || (c.tipo === 'saldo' ? 'saldo anterior' : 'pagamento'))}</small></span><b>${m(c.valor)}</b></div>`).join('');
 }
 
 function secaoFatura(i) {
@@ -609,17 +612,22 @@ function secaoFatura(i) {
     if (pag) h += `<div class="aviso">Pagamentos antecipados na fatura: ${m(pag)}</div>`;
     h += `<details class="compras"><summary>Ver as ${cs.length} linhas (importado por ${esc(quemCurto(cs[0].importado_por))} em ${esc(dataBR(cs[0].importado_em) + ' às ' + String(cs[0].importado_em).slice(11))})</summary>${listaCompras(cs)}</details>`;
   } else h += '<div class="aviso" style="margin-bottom:8px">Nenhuma fatura importada para este mês.</div>';
-  return h + `<label class="btn">${cs.length ? 'Importar de novo' : 'Importar fatura'} (CSV do Nubank)<input type="file" id="arqFatura" accept=".csv,text/csv" hidden></label></div>`;
+  return h + `<label class="btn">${cs.length ? 'Importar de novo' : 'Importar fatura'} (CSV do Nubank ou PDF do BB)<input type="file" id="arqFatura" accept=".csv,text/csv,.pdf,application/pdf" hidden></label></div>`;
 }
 
 // Mostra o que vai ser gravado; só grava ao confirmar.
-function previaFatura(i, linhas, arquivo) {
-  const total = Math.round(linhas.reduce((s, l) => s + l.valor, 0) * 100) / 100;
+// fat = { banco, linhas, total (se o arquivo traz o total; senão é a soma das linhas), avisos }.
+function previaFatura(i, fat, arquivo) {
+  const linhas = fat.linhas;
+  const soma = Math.round(linhas.reduce((s, l) => s + l.valor, 0) * 100) / 100;
+  const total = fat.total === undefined ? soma : fat.total;
   const pag = linhas.filter(l => l.tipo === 'pagamento').reduce((s, l) => s + l.valor, 0);
-  const datas = linhas.map(l => l.data).sort();
+  const saldo = linhas.filter(l => l.tipo === 'saldo').reduce((s, l) => s + l.valor, 0);
+  const datas = linhas.filter(l => l.tipo !== 'saldo').map(l => l.data).sort();
   const antes = comprasDe(i.id).length;
-  const avisos = [];
-  if (!/nubank/i.test(i.item)) avisos.push(`Esse cartão não parece ser Nubank (${i.item}).`);
+  const avisos = (fat.avisos || []).slice();
+  if (!new RegExp(fat.banco === 'BB' ? '\\bBB\\b' : fat.banco, 'i').test(i.item)) avisos.push(`Esse cartão não parece ser ${fat.banco} (${i.item}).`);
+  if (Math.abs(soma - total) > 0.01) avisos.push(`As linhas somam ${brl(soma)} e o total da fatura é ${brl(total)}. Confira antes de importar.`);
   if (i.vencimento && datas[datas.length - 1] > i.vencimento) avisos.push(`Tem compra depois do vencimento (${dataBR(i.vencimento)}). Confira se é o mês certo.`);
   if (antes) avisos.push(`Substitui a importação anterior (${antes} linhas).`);
   abrirFolha(`
@@ -627,9 +635,11 @@ function previaFatura(i, linhas, arquivo) {
     <div class="sub">${esc(i.item)} · ${esc(nomeMes(i.mes))}</div>
     <div class="dados">
       <span>Arquivo</span><span>${esc(arquivo)}</span>
-      <span>Compras</span><span>${linhas.filter(l => l.tipo !== 'pagamento').length}, de ${dataBR(datas[0])} a ${dataBR(datas[datas.length - 1])}</span>
+      <span>Banco</span><span>${esc(fat.banco)}</span>
+      ${saldo ? `<span>Saldo anterior</span><span>${brl(saldo)}</span>` : ''}
+      <span>Compras</span><span>${linhas.filter(l => l.tipo !== 'pagamento' && l.tipo !== 'saldo').length}, de ${dataBR(datas[0])} a ${dataBR(datas[datas.length - 1])}</span>
       ${pag ? `<span>Pagamentos</span><span>${brl(pag)}</span>` : ''}
-      <span>Total do arquivo</span><span><b>${brl(total)}</b></span>
+      <span>Total da fatura</span><span><b>${brl(total)}</b></span>
       <span>Valor do mês hoje</span><span>${brl(i.valor_brl)}</span>
     </div>
     ${htmlGrade(gradeCategorias(linhas))}
@@ -650,6 +660,56 @@ function previaFatura(i, linhas, arquivo) {
       atualizarItem(r.item); detalhe(i.id); toast('Fatura importada');
     } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Confirmar importação'; }
   };
+}
+
+// ---------- fatura em PDF ----------
+
+const DINHEIRO_BR = /^R\$\s*-?\d{1,3}(\.\d{3})*,\d{2}$/;
+// "28/10" vira data completa pelo vencimento do cartão no app (mês depois do vencimento é do ano anterior).
+function dataDe(ddmm, ref) {
+  const [d, mm] = ddmm.split('/').map(Number);
+  const a = Number(ref.slice(0, 4)) - (mm > Number(ref.slice(5, 7)) ? 1 : 0);
+  return `${a}-${String(mm).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function lerFaturaPDF(itens, ref) {
+  const tudo = itens.map(i => i.s).join(' ');
+  if (/ourocard|bb\.com\.br/i.test(tudo) && /lançamentos nesta fatura/i.test(tudo)) return lerFaturaBB(itens, ref);
+  throw new Error('Ainda não sei ler a fatura desse banco em PDF.');
+}
+
+// BB (Ourocard): "Lançamentos nesta fatura" em grupos do próprio BB (Saúde, Transporte, Compras parceladas...),
+// cada linha com data, descrição, país e valor; "SALDO FATURA ANTERIOR" sem data; "Total da Fatura" no fim.
+// A categoria vem das regras do app; se elas não souberem (Outros), usa o grupo do BB quando ele existe aqui.
+const GRUPOS_BB = { 'saúde': 'Saúde', 'transporte': 'Transporte', 'supermercados': 'Mercado', 'educação': 'Educação', 'restaurantes': 'Lazer', 'lazer': 'Lazer', 'viagens': 'Viagens', 'turismo': 'Viagens' };
+function lerFaturaBB(itens, ref) {
+  const L = linhasPDF(itens);
+  const linhas = [], avisos = [];
+  let dentro = false, grupo = '', total = null, fecha = '';
+  for (const l of L) {
+    const t = l.texto;
+    let m = t.match(/fatura fechada em (\d{2})\/(\d{2})\/(\d{4})/i);
+    if (m) fecha = `${m[3]}-${m[2]}-${m[1]}`;
+    if (/^lançamentos nesta fatura/i.test(t)) { dentro = true; continue; }
+    if (!dentro) continue;
+    const ult = l.itens[l.itens.length - 1].s.trim();
+    if (/^total da fatura/i.test(t)) { total = numero(ult); break; }
+    if (!DINHEIRO_BR.test(ult)) { if (l.itens.length <= 2 && !/^(data\b|página \d)/i.test(t)) grupo = t.toLowerCase(); continue; }
+    const valor = numero(ult);
+    const desc = l.itens.filter(i => i.x >= 75 && i.x < 440).map(i => i.s).join(' ').replace(/\s+/g, ' ').trim();
+    if (/^saldo fatura anterior/i.test(desc)) { linhas.push({ data: fecha || ref, descricao: 'Saldo fatura anterior', parcela: '', tipo: 'saldo', categoria: '', valor }); continue; }
+    const d = l.itens[0].s.trim();
+    if (!/^\d{2}\/\d{2}$/.test(d)) { avisos.push('Linha que não entendi: ' + t); continue; }
+    const p = desc.match(/\bPARC (\d{2})\/(\d{2})\b/i);
+    const descricao = (p ? desc.replace(p[0], ' ') : desc).replace(/\s+/g, ' ').trim();
+    const tipo = /pagamentos/i.test(grupo) && valor < 0 ? (/pgto|pagamento/i.test(descricao) ? 'pagamento' : 'estorno') : valor < 0 ? 'estorno' : 'compra';
+    let categoria = tipo === 'pagamento' ? '' : categoriaDe(descricao);
+    if (categoria === 'Outros' && GRUPOS_BB[grupo]) categoria = GRUPOS_BB[grupo];
+    linhas.push({ data: dataDe(d, ref), descricao, parcela: p ? `${Number(p[1])}/${Number(p[2])}` : '', tipo, categoria, valor });
+  }
+  if (total === null) throw new Error('Não achei o "Total da Fatura" no PDF do BB.');
+  if (L.filter(l => /\(cartão \d{4}\)/i.test(l.texto)).length > 1) avisos.push('A fatura tem mais de um cartão (adicional); as compras entram todas juntas.');
+  return { banco: 'BB', linhas, total, avisos };
 }
 
 // ---------- PDF (fatura e extrato) ----------
