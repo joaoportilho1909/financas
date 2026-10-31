@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f6f4ef">
+<meta name="theme-color" content="#f3f5f9">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Finanças</title>
 <style>
   :root {
-    --bg: #f6f4ef; --card: #ffffff; --ink: #24211b; --muted: #8b8579; --line: #eeeae1;
-    --gold: #8a6a1e; --gold-2: #b8913f; --gold-bg: #f5eedc; --accent-ink: #ffffff;
+    --bg: #f3f5f9; --card: #ffffff; --ink: #1f2430; --muted: #7d8494; --line: #e7eaf0;
+    --acc: #2450b8; --acc-2: #3f6fe0; --acc-bg: #e2e9fb; --accent-ink: #ffffff;
     --green: #2f8a5b; --green-bg: #e3f2e9; --red: #c2402f; --red-bg: #fbe8e5;
-    --shadow: 0 2px 12px rgba(70, 55, 20, .07); --r: 20px;
+    --shadow: 0 2px 12px rgba(20, 35, 70, .07); --r: 20px;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; background: var(--bg); color: var(--ink);
@@ -26,12 +26,12 @@
   .mesnav .mes { font-size: 19px; font-weight: 700; text-align: center; flex: 1; }
   .mesnav .mes small { color: var(--muted); font-weight: 500; font-size: 15px; }
   .nav { width: 38px; height: 38px; border-radius: 19px; border: 0; background: var(--card); box-shadow: var(--shadow);
-    font-size: 20px; color: var(--gold); cursor: pointer; }
+    font-size: 20px; color: var(--acc); cursor: pointer; }
   .nav:disabled { opacity: .3; }
 
   .card { background: var(--card); border-radius: var(--r); box-shadow: var(--shadow); padding: 16px; margin: 12px 0; }
   .card h2 { font-size: 15px; font-weight: 700; margin: 0 0 12px; display: flex; justify-content: space-between; align-items: center; }
-  .card h2 a { font-size: 13px; font-weight: 600; color: var(--gold); cursor: pointer; }
+  .card h2 a { font-size: 13px; font-weight: 600; color: var(--acc); cursor: pointer; }
 
   .hero { text-align: center; padding: 18px 16px 16px; }
   .hero .rot { color: var(--muted); font-size: 13px; display: flex; justify-content: center; align-items: center; gap: 6px; }
@@ -47,8 +47,8 @@
   .bola.up { background: var(--green); color: #fff; } .bola.down { background: var(--red); color: #fff; }
   .verde { color: var(--green); } .vermelho { color: var(--red); }
 
-  .barraprog { height: 8px; border-radius: 4px; background: var(--gold-bg); overflow: hidden; margin: 10px 0 8px; }
-  .barraprog i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-2)); border-radius: 4px; }
+  .barraprog { height: 8px; border-radius: 4px; background: var(--acc-bg); overflow: hidden; margin: 10px 0 8px; }
+  .barraprog i { display: block; height: 100%; background: linear-gradient(90deg, var(--acc), var(--acc-2)); border-radius: 4px; }
   .linhaprog { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
   .alerta { margin-top: 10px; font-size: 13px; color: var(--red); background: var(--red-bg); border-radius: 10px; padding: 8px 10px; cursor: pointer; }
 
@@ -62,7 +62,7 @@
   .chips { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; scrollbar-width: none; }
   .chip { border: 1px solid var(--line); background: var(--card); border-radius: 16px; padding: 5px 13px;
     white-space: nowrap; cursor: pointer; font-size: 13px; color: var(--muted); }
-  .chip.on { background: var(--gold); color: var(--accent-ink); border-color: var(--gold); }
+  .chip.on { background: var(--acc); color: var(--accent-ink); border-color: var(--acc); }
 
   .dia { font-size: 14px; font-weight: 700; margin: 18px 4px 6px; }
   .dia small { color: var(--muted); font-weight: 500; }
@@ -82,17 +82,17 @@
   .item.pago .nome { color: var(--muted); }
   .vazio { padding: 14px; color: var(--muted); text-align: center; }
 
-  .barra { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); box-shadow: 0 -2px 14px rgba(70,55,20,.08);
+  .barra { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); box-shadow: 0 -2px 14px rgba(20,35,70,.08);
     display: flex; justify-content: space-around; align-items: center; padding: 6px 4px calc(8px + env(safe-area-inset-bottom)); z-index: 6; }
   .barra button { background: none; border: 0; color: var(--muted); font-size: 11px; padding: 4px 6px; cursor: pointer;
     display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 62px; }
   .barra button svg { width: 22px; height: 22px; }
-  .barra button.on { color: var(--gold); font-weight: 600; }
+  .barra button.on { color: var(--acc); font-weight: 600; }
   .barra button:disabled { opacity: .45; }
-  .barra .mais { width: 56px; height: 56px; min-width: 56px; border-radius: 28px; background: linear-gradient(135deg, var(--gold-2), var(--gold));
-    color: #fff; font-size: 30px; line-height: 1; margin-top: -30px; box-shadow: 0 4px 14px rgba(138,106,30,.4); }
+  .barra .mais { width: 56px; height: 56px; min-width: 56px; border-radius: 28px; background: linear-gradient(135deg, var(--acc-2), var(--acc));
+    color: #fff; font-size: 30px; line-height: 1; margin-top: -30px; box-shadow: 0 4px 14px rgba(36,80,184,.4); }
 
-  .fundo { position: fixed; inset: 0; background: rgba(30,25,15,.35); display: none; align-items: flex-end; justify-content: center; z-index: 10; }
+  .fundo { position: fixed; inset: 0; background: rgba(15,20,35,.35); display: none; align-items: flex-end; justify-content: center; z-index: 10; }
   .fundo.on { display: flex; }
   .folha { background: var(--card); width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto;
     border-radius: 24px 24px 0 0; padding: 18px 16px calc(20px + env(safe-area-inset-bottom)); }
@@ -107,27 +107,27 @@
   .dados span:nth-child(odd) { color: var(--muted); }
   .btn { width: 100%; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--card);
     cursor: pointer; margin-top: 8px; font-weight: 600; }
-  .btn.pri { background: linear-gradient(135deg, var(--gold-2), var(--gold)); color: #fff; border-color: var(--gold); }
+  .btn.pri { background: linear-gradient(135deg, var(--acc-2), var(--acc)); color: #fff; border-color: var(--acc); }
   .btn.perigo { color: var(--red); }
   .btn:disabled { opacity: .5; }
   .seg { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   .seg button { flex: 1; padding: 9px; border: 0; background: var(--bg); cursor: pointer; }
-  .seg button.on { background: var(--gold); color: #fff; }
+  .seg button.on { background: var(--acc); color: #fff; }
   .check { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
-  .check input { width: 20px; height: 20px; accent-color: var(--gold); }
-  .links a { display: block; color: var(--gold); margin: 2px 0; }
+  .check input { width: 20px; height: 20px; accent-color: var(--acc); }
+  .links a { display: block; color: var(--acc); margin: 2px 0; }
   .aviso { font-size: 13px; color: var(--muted); margin-top: 4px; }
 
   .login { text-align: center; padding: 60px 0; }
   .login .marca { width: 72px; height: 72px; border-radius: 22px; margin: 0 auto 14px; display: flex; align-items: center; justify-content: center;
-    background: linear-gradient(135deg, var(--gold-2), var(--gold)); color: #fff; font-weight: 800; font-size: 26px; }
+    background: linear-gradient(135deg, var(--acc-2), var(--acc)); color: #fff; font-weight: 800; font-size: 26px; }
   .login #botaoGoogle { display: inline-block; margin-top: 10px; min-height: 44px; }
   .rodape { text-align: center; color: var(--muted); font-size: 12px; margin: 22px 0 8px; }
-  .rodape button { background: none; border: 0; color: var(--gold); text-decoration: underline; cursor: pointer; padding: 0 4px; }
+  .rodape button { background: none; border: 0; color: var(--acc); text-decoration: underline; cursor: pointer; padding: 0 4px; }
   .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: var(--ink); color: #fff;
     padding: 9px 16px; border-radius: 12px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
   .toast.on { opacity: 1; }
-  .carregando { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: var(--gold); transform: scaleX(0);
+  .carregando { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: var(--acc); transform: scaleX(0);
     transform-origin: left; transition: transform .3s; z-index: 30; }
   .carregando.on { transform: scaleX(.8); transition: transform 4s; }
   .erro { background: var(--red-bg); color: var(--red); padding: 12px; border-radius: 12px; margin: 16px 0; }
@@ -267,7 +267,7 @@ const CAT = {
   'Lazer': ['🎉', '#fbe8ef'], 'Mercado': ['🛒', '#e6f3e4'], 'Moradia': ['🏠', '#f6e9dc'], 'Outros': ['📌', '#eeece7'],
   'Pets': ['🐾', '#f3ebe0'], 'Presentes': ['🎁', '#fbe8e5'], 'Saúde': ['🩺', '#e3f0f2'], 'Transporte': ['🚗', '#e5ebf5'], 'Viagens': ['✈️', '#e3eef8'],
 };
-const CORES = ['#8a6a1e', '#c9a24a', '#3d6f8e', '#7f9f80', '#b5634b', '#a59c8d'];
+const CORES = ['#e0892f', '#2a9d8f', '#8e6bbf', '#c9a227', '#d16ba5', '#9aa0a6'];
 const DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 st.aba = 'principal';
 st.oculto = ler('fin_oculto') === '1';
@@ -347,7 +347,7 @@ function rosca(cats) {
     const a = `<circle r="${R}" cx="60" cy="60" fill="none" stroke="${CORES[n % CORES.length]}" stroke-width="18" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-acum}" transform="rotate(-90 60 60)"/>`;
     acum += len; return a;
   }).join('');
-  return `<svg width="120" height="120" viewBox="0 0 120 120">${arcos}<text x="60" y="57" text-anchor="middle" font-size="10" fill="#8b8579">Total</text><text x="60" y="72" text-anchor="middle" font-size="12" font-weight="700" fill="#24211b">${st.oculto ? '••••' : (total / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil'}</text></svg>`;
+  return `<svg width="120" height="120" viewBox="0 0 120 120">${arcos}<text x="60" y="57" text-anchor="middle" font-size="10" fill="#7d8494">Total</text><text x="60" y="72" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2430">${st.oculto ? '••••' : (total / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil'}</text></svg>`;
 }
 
 function telaTransacoes() {
