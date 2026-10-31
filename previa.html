@@ -190,7 +190,7 @@ let SESSAO = ler('fin_sessao');
 function mostrarLogin(msg) {
   SESSAO = null; guardar('fin_sessao', null);
   $('titulo').textContent = 'Finanças';
-  $('conteudo').innerHTML = `<div class="login"><div class="marca">R$</div><p>Entre com a sua conta Google.</p>${msg ? `<div class="erro">${esc(msg)}</div>` : ''}<div id="botaoGoogle"></div></div>`;
+  $('conteudo').innerHTML = `<div class="login"><img class="marca" src="icon-192.png" alt=""><p>Entre com a sua conta Google.</p>${msg ? `<div class="erro">${esc(msg)}</div>` : ''}<div id="botaoGoogle"></div></div>`;
   desenharBotao();
 }
 function desenharBotao() {
