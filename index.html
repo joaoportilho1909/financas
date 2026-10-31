@@ -131,6 +131,20 @@
     transform-origin: left; transition: transform .3s; z-index: 30; }
   .carregando.on { transform: scaleX(.8); transition: transform 4s; }
   .erro { background: var(--red-bg); color: var(--red); padding: 12px; border-radius: 12px; margin: 16px 0; }
+  .grade { margin: 6px 0; }
+  .grade .g { display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 3px 10px; padding: 6px 0; }
+  .grade .g .ico { width: 32px; height: 32px; font-size: 15px; grid-row: span 2; }
+  .grade .g .nome { font-size: 14px; }
+  .grade .g b { font-size: 14px; }
+  .grade .g .barra-cat { grid-column: 2 / 4; height: 5px; border-radius: 3px; background: var(--acc-bg); overflow: hidden; }
+  .grade .g .barra-cat i { display: block; height: 100%; background: var(--acc); border-radius: 3px; }
+  details.compras { font-size: 13px; margin: 8px 0; }
+  details.compras summary { color: var(--acc); cursor: pointer; padding: 4px 0; }
+  details.compras div { display: flex; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+  details.compras .d { color: var(--muted); width: 38px; flex: none; }
+  details.compras .t { flex: 1; min-width: 0; }
+  details.compras small { color: var(--muted); }
+  label.btn, .campo label.btn { display: block; text-align: center; cursor: pointer; font-size: 15px; color: var(--ink); margin: 8px 0 0; }
 </style>
 </head>
 <body>
@@ -176,7 +190,7 @@ let SESSAO = ler('fin_sessao');
 function mostrarLogin(msg) {
   SESSAO = null; guardar('fin_sessao', null);
   $('titulo').textContent = 'Finanças';
-  $('conteudo').innerHTML = `<div class="login"><div class="marca">R$</div><p>Entre com a sua conta Google.</p>${msg ? `<div class="erro">${esc(msg)}</div>` : ''}<div id="botaoGoogle"></div></div>`;
+  $('conteudo').innerHTML = `<div class="login"><img class="marca" src="icon-192.png" alt=""><p>Entre com a sua conta Google.</p>${msg ? `<div class="erro">${esc(msg)}</div>` : ''}<div id="botaoGoogle"></div></div>`;
   desenharBotao();
 }
 function desenharBotao() {
@@ -334,6 +348,13 @@ function telaPrincipal() {
   if (cats.length > 5) cats = cats.slice(0, 5).concat([['Outras', cats.slice(5).reduce((s, c) => s + c[1], 0)]]);
   if (cats.length) h += `<div class="card"><h2>Despesas por categoria</h2><div class="rosca">${rosca(cats)}<div class="legenda">${cats.map((c, n) => `<div><span class="ponto" style="background:${CORES[n % CORES.length]}"></span><span class="nome">${esc(c[0])}</span><b>${m(c[1])}</b></div>`).join('')}</div></div></div>`;
 
+  const ids = new Set(itens.map(i => i.id));
+  const doMes = (st.compras || []).filter(c => ids.has(c.lanc_id));
+  if (doMes.length) {
+    const n = new Set(doMes.map(c => c.lanc_id)).size;
+    h += `<div class="card"><h2>Gastos no cartão</h2><div class="aviso" style="margin:-6px 0 4px">${n} ${n === 1 ? 'fatura importada' : 'faturas importadas'}, compras por categoria</div>${htmlGrade(gradeCategorias(doMes))}</div>`;
+  }
+
   const cartoes = itens.filter(i => i.categoria === 'Cartões de Crédito' && i.tipo === 'Despesa').sort((a, b) => (a.vencimento || '').localeCompare(b.vencimento || ''));
   if (cartoes.length) h += `<div class="card"><h2>Cartões de crédito</h2><div class="lista">${cartoes.map(linha).join('')}</div></div>`;
   return h;
@@ -424,6 +445,8 @@ function detalhe(id) {
       <div class="linha2"><input id="vMes" inputmode="decimal" value="${temOverride ? String(i.valor_mes).replace('.', ',') : ''}" placeholder="${String(i.valor_previsto).replace('.', ',')}">
       <button class="btn" id="bValor" style="margin:0">Salvar valor</button></div></div>
 
+    ${i.categoria === 'Cartões de Crédito' && !receita ? secaoFatura(i) : ''}
+
     <div class="campo"><label>Comprovante</label>
       <div class="links">${links.map((l, n) => `<a href="${esc(l)}" target="_blank">Abrir comprovante${links.length > 1 ? ' ' + (n + 1) : ''}</a>`).join('')}</div>
       <input type="file" id="arq" accept="${ACEITA}"></div>
@@ -465,6 +488,11 @@ function detalhe(id) {
     try { const { b64, mime, nome } = await prepararArquivo(f); const novo = await call('anexarComprovante', id, nome, mime, b64); atualizarItem(novo); detalhe(id); toast('Comprovante anexado'); }
     catch (err) { erro(err); e.target.disabled = false; }
   };
+  if ($('arqFatura')) $('arqFatura').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try { previaFatura(i, lerFaturaNubank(await f.text()), f.name); }
+    catch (err) { erro(err); e.target.value = ''; }
+  };
   if ($('bExcluir')) $('bExcluir').onclick = async e => {
     if (e.target.dataset.conf !== '1') { e.target.dataset.conf = '1'; e.target.textContent = 'Toque de novo para excluir'; return; }
     e.target.disabled = true;
@@ -496,6 +524,126 @@ function lerCru(f) {
     r.onload = () => ok({ b64: r.result.split(',')[1], mime: f.type || 'application/octet-stream', nome: f.name });
     r.onerror = () => falha(r.error); r.readAsDataURL(f);
   });
+}
+
+// ---------- fatura do cartão (CSV do Nubank) ----------
+
+// Categoria pela descrição da compra; vale a primeira regra que bater. Sem reclassificação no app por enquanto: corrigir aqui.
+const REGRAS = [
+  [/^iof de/i, 'Impostos'],
+  [/uber|99app|99 ?pop|veloe|sem ?parar|conectcar|combust|posto|shell|ipiranga|petrobras|estaciona|taxi/i, 'Transporte'],
+  [/booking|hotel|airbnb|smiles|latam|gol linhas|azul linhas|decolar|123 ?milhas|maxmilhas|hostel|pousada/i, 'Viagens'],
+  [/supermerc|mercado(?! ?pago| ?livre)|atacad|assai|carrefour|hortifruti|a[cç]ougue|padaria|sacol[aã]o/i, 'Mercado'],
+  [/drogasil|drogaria|droga ?raia|farm[aá]c|pague menos|hospital|cl[ií]nica|laborat|odonto|unimed|[oó]tica/i, 'Saúde'],
+  [/petz|cobasi|pet ?shop|veterin/i, 'Pets'],
+  [/ifood|rappi|restaurante|buteko|lanchonete|pizzar|burger|cali republic|mangai|sociotorcedor|botafogo|netflix|spotify|disney|hbo|prime video|youtube|cinema|ingresso|sympla|steam|playstation/i, 'Lazer'],
+  [/escola|faculdade|curso|udemy|alura|livraria/i, 'Educação'],
+];
+const categoriaDe = d => (REGRAS.find(r => r[0].test(d)) || [0, 'Outros'])[1];
+
+function lerCSV(texto) {
+  const linhas = []; let campo = '', linha = [], aspas = false;
+  texto = texto.replace(/^\uFEFF/, '');
+  const fecha = () => { linha.push(campo); campo = ''; if (linha.some(x => x.trim())) linhas.push(linha); linha = []; };
+  for (let k = 0; k < texto.length; k++) {
+    const c = texto[k];
+    if (aspas) {
+      if (c !== '"') campo += c;
+      else if (texto[k + 1] === '"') { campo += '"'; k++; }
+      else aspas = false;
+    } else if (c === '"') aspas = true;
+    else if (c === ',') { linha.push(campo); campo = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && texto[k + 1] === '\n') k++; fecha(); }
+    else campo += c;
+  }
+  fecha();
+  return linhas;
+}
+
+// Fatura do cartão Nubank: colunas date,title,amount; pagamento vem negativo ("- 500,39"); parcela no fim do título.
+function lerFaturaNubank(texto) {
+  const t = lerCSV(texto);
+  const cab = (t[0] || []).map(x => x.trim().toLowerCase());
+  const [cd, ct, ca] = ['date', 'title', 'amount'].map(k => cab.indexOf(k));
+  if (cd < 0 || ct < 0 || ca < 0) throw new Error('Não reconheci o arquivo. Use o CSV da fatura do cartão Nubank (colunas date, title, amount).');
+  const linhas = t.slice(1).map(r => {
+    const data = String(r[cd] || '').trim(), valor = numero(String(r[ca] || '').replace(/\s/g, ''));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || !isFinite(valor)) throw new Error('Linha que não entendi: ' + r.join(','));
+    let desc = String(r[ct] || '').trim(), parcela = '';
+    const p = desc.match(/\s*-\s*Parcela (\d+\/\d+)\s*$/i);
+    if (p) { parcela = p[1]; desc = desc.slice(0, p.index).trim(); }
+    const tipo = /^pagamento recebido/i.test(desc) ? 'pagamento' : /^iof de/i.test(desc) ? 'iof' : valor < 0 ? 'estorno' : 'compra';
+    return { data, descricao: desc, parcela, tipo, categoria: tipo === 'pagamento' ? '' : categoriaDe(desc), valor: Math.round(valor * 100) / 100 };
+  });
+  if (!linhas.length) throw new Error('O arquivo não tem lançamentos.');
+  return linhas;
+}
+
+const comprasDe = id => (st.compras || []).filter(c => c.lanc_id === id);
+// Soma por categoria: compras, IOF e estornos; pagamento antecipado fica de fora.
+function gradeCategorias(cs) {
+  const g = {};
+  cs.filter(c => c.tipo !== 'pagamento').forEach(c => { const k = c.categoria || 'Outros'; g[k] = (g[k] || 0) + Number(c.valor); });
+  return Object.entries(g).filter(c => Math.abs(c[1]) >= 0.005).sort((a, b) => b[1] - a[1]);
+}
+function htmlGrade(cats) {
+  const max = Math.max(1, ...cats.map(c => c[1]));
+  return `<div class="grade">${cats.map(([c, v]) => `<div class="g">${icone({ categoria: c })}<span class="nome">${esc(c)}</span><b>${m(v)}</b><span class="barra-cat"><i style="width:${Math.max(0, 100 * v / max).toFixed(1)}%"></i></span></div>`).join('')}</div>`;
+}
+function listaCompras(cs) {
+  return cs.slice().sort((a, b) => b.data.localeCompare(a.data)).map(c => `<div><span class="d">${dataBR(c.data)}</span><span class="t">${esc(c.descricao)}${c.parcela ? ' <small>' + esc(c.parcela) + '</small>' : ''}<br><small>${esc(c.categoria || 'pagamento')}</small></span><b>${m(c.valor)}</b></div>`).join('');
+}
+
+function secaoFatura(i) {
+  const cs = comprasDe(i.id);
+  const pag = cs.filter(c => c.tipo === 'pagamento').reduce((s, c) => s + Number(c.valor), 0);
+  let h = '<div class="campo"><label>Fatura por categoria</label>';
+  if (cs.length) {
+    h += htmlGrade(gradeCategorias(cs));
+    if (pag) h += `<div class="aviso">Pagamentos antecipados na fatura: ${m(pag)}</div>`;
+    h += `<details class="compras"><summary>Ver as ${cs.length} linhas (importado por ${esc(quemCurto(cs[0].importado_por))} em ${esc(dataBR(cs[0].importado_em) + ' às ' + String(cs[0].importado_em).slice(11))})</summary>${listaCompras(cs)}</details>`;
+  } else h += '<div class="aviso" style="margin-bottom:8px">Nenhuma fatura importada para este mês.</div>';
+  return h + `<label class="btn">${cs.length ? 'Importar de novo' : 'Importar fatura'} (CSV do Nubank)<input type="file" id="arqFatura" accept=".csv,text/csv" hidden></label></div>`;
+}
+
+// Mostra o que vai ser gravado; só grava ao confirmar.
+function previaFatura(i, linhas, arquivo) {
+  const total = Math.round(linhas.reduce((s, l) => s + l.valor, 0) * 100) / 100;
+  const pag = linhas.filter(l => l.tipo === 'pagamento').reduce((s, l) => s + l.valor, 0);
+  const datas = linhas.map(l => l.data).sort();
+  const antes = comprasDe(i.id).length;
+  const avisos = [];
+  if (!/nubank/i.test(i.item)) avisos.push(`Esse cartão não parece ser Nubank (${i.item}).`);
+  if (i.vencimento && datas[datas.length - 1] > i.vencimento) avisos.push(`Tem compra depois do vencimento (${dataBR(i.vencimento)}). Confira se é o mês certo.`);
+  if (antes) avisos.push(`Substitui a importação anterior (${antes} linhas).`);
+  abrirFolha(`
+    <h3>Importar fatura</h3>
+    <div class="sub">${esc(i.item)} · ${esc(nomeMes(i.mes))}</div>
+    <div class="dados">
+      <span>Arquivo</span><span>${esc(arquivo)}</span>
+      <span>Compras</span><span>${linhas.filter(l => l.tipo !== 'pagamento').length}, de ${dataBR(datas[0])} a ${dataBR(datas[datas.length - 1])}</span>
+      ${pag ? `<span>Pagamentos</span><span>${brl(pag)}</span>` : ''}
+      <span>Total do arquivo</span><span><b>${brl(total)}</b></span>
+      <span>Valor do mês hoje</span><span>${brl(i.valor_brl)}</span>
+    </div>
+    ${htmlGrade(gradeCategorias(linhas))}
+    ${avisos.map(a => `<div class="alerta">${esc(a)}</div>`).join('')}
+    <div class="campo"><label>Valor do mês do cartão (R$). Se o PDF da fatura der outro total, corrija aqui.</label>
+      <input id="totFat" inputmode="decimal" value="${total.toFixed(2).replace('.', ',')}"></div>
+    <button class="btn pri" id="bImp">Confirmar importação</button>
+    <details class="compras"><summary>Ver as ${linhas.length} linhas</summary>${listaCompras(linhas)}</details>
+    <button class="btn" id="bVoltar">Voltar</button>`);
+  $('bVoltar').onclick = () => detalhe(i.id);
+  $('bImp').onclick = async e => {
+    const t = numero($('totFat').value);
+    if (!isFinite(t) || $('totFat').value.trim() === '') return toast('Total inválido');
+    e.target.disabled = true; e.target.textContent = 'Gravando…';
+    try {
+      const r = await call('importarFatura', i.id, t, linhas, arquivo);
+      st.compras = (st.compras || []).filter(c => c.lanc_id !== i.id).concat(r.compras);
+      atualizarItem(r.item); detalhe(i.id); toast('Fatura importada');
+    } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Confirmar importação'; }
+  };
 }
 
 function novo() {
