@@ -3,122 +3,151 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1f6f50">
+<meta name="theme-color" content="#f3f5f9">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Finanças</title>
 <style>
   :root {
-    --bg: #f4f5f2; --card: #ffffff; --ink: #1d2320; --muted: #6b736e; --line: #e2e5e0;
-    --accent: #1f6f50; --accent-ink: #ffffff; --red: #b3261e; --red-bg: #fbeceb;
-    --green: #1f6f50; --green-bg: #e6f2ec; --shadow: 0 1px 2px rgba(0,0,0,.06);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #121513; --card: #1b1f1d; --ink: #e8ebe9; --muted: #9aa39e; --line: #2b302d;
-      --accent: #5cc095; --accent-ink: #0d1a14; --red: #f2847b; --red-bg: #3a1f1d;
-      --green: #5cc095; --green-bg: #183027; --shadow: none;
-    }
+    --bg: #f3f5f9; --card: #ffffff; --ink: #1f2430; --muted: #7d8494; --line: #e7eaf0;
+    --acc: #2450b8; --acc-2: #3f6fe0; --acc-bg: #e2e9fb; --accent-ink: #ffffff;
+    --green: #2f8a5b; --green-bg: #e3f2e9; --red: #c2402f; --red-bg: #fbe8e5;
+    --shadow: 0 2px 12px rgba(20, 35, 70, .07); --r: 20px;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; background: var(--bg); color: var(--ink);
     font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
   button, input, select, textarea { font: inherit; color: inherit; }
-  .wrap { max-width: 640px; margin: 0 auto; padding: 12px 16px 96px; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 4px 16px 110px; }
 
-  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 12px; }
-  header h1 { font-size: 20px; margin: 0; text-align: center; flex: 1; }
-  .nav { width: 40px; height: 40px; border-radius: 20px; border: 1px solid var(--line);
-    background: var(--card); font-size: 20px; cursor: pointer; }
+  .topo { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 10px 16px 6px; }
+  .mesnav { max-width: 560px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+  .mesnav .mes { font-size: 19px; font-weight: 700; text-align: center; flex: 1; }
+  .mesnav .mes small { color: var(--muted); font-weight: 500; font-size: 15px; }
+  .nav { width: 38px; height: 38px; border-radius: 19px; border: 0; background: var(--card); box-shadow: var(--shadow);
+    font-size: 20px; color: var(--acc); cursor: pointer; }
   .nav:disabled { opacity: .3; }
 
-  .placar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
-  .kpi { background: var(--card); border-radius: 12px; padding: 10px; box-shadow: var(--shadow); }
-  .kpi small { display: block; color: var(--muted); font-size: 12px; }
-  .kpi b { font-size: 15px; white-space: nowrap; }
-  .neg { color: var(--red); }
+  .card { background: var(--card); border-radius: var(--r); box-shadow: var(--shadow); padding: 16px; margin: 12px 0; }
+  .card h2 { font-size: 15px; font-weight: 700; margin: 0 0 12px; display: flex; justify-content: space-between; align-items: center; }
+  .card h2 a { font-size: 13px; font-weight: 600; color: var(--acc); cursor: pointer; }
 
-  .chips { display: flex; gap: 6px; overflow-x: auto; padding: 6px 0; scrollbar-width: none; }
-  .chip { border: 1px solid var(--line); background: var(--card); border-radius: 16px; padding: 5px 12px;
-    white-space: nowrap; cursor: pointer; font-size: 14px; }
-  .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .hero { text-align: center; padding: 18px 16px 16px; }
+  .hero .rot { color: var(--muted); font-size: 13px; display: flex; justify-content: center; align-items: center; gap: 6px; }
+  .olho { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px; display: inline-flex; }
+  .hero .saldo { font-size: 32px; font-weight: 750; letter-spacing: -.5px; margin: 2px 0 14px; }
+  .hero .saldo.neg { color: var(--red); }
+  .duas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; }
+  .duas div { display: flex; align-items: center; gap: 10px; }
+  .duas small { display: block; color: var(--muted); font-size: 12px; }
+  .duas b { font-size: 15px; }
+  .bola { width: 38px; height: 38px; border-radius: 19px; display: inline-flex; align-items: center; justify-content: center;
+    flex: none; font-size: 18px; }
+  .bola.up { background: var(--green); color: #fff; } .bola.down { background: var(--red); color: #fff; }
+  .verde { color: var(--green); } .vermelho { color: var(--red); }
 
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 4px 6px; }
-  .lista { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
-  .item { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-top: 1px solid var(--line); cursor: pointer; }
+  .barraprog { height: 8px; border-radius: 4px; background: var(--acc-bg); overflow: hidden; margin: 10px 0 8px; }
+  .barraprog i { display: block; height: 100%; background: linear-gradient(90deg, var(--acc), var(--acc-2)); border-radius: 4px; }
+  .linhaprog { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+  .alerta { margin-top: 10px; font-size: 13px; color: var(--red); background: var(--red-bg); border-radius: 10px; padding: 8px 10px; cursor: pointer; }
+
+  .rosca { display: flex; align-items: center; gap: 16px; }
+  .rosca svg { flex: none; }
+  .legenda { flex: 1; min-width: 0; }
+  .legenda div { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 5px 0; }
+  .legenda span.ponto { width: 10px; height: 10px; border-radius: 5px; flex: none; }
+  .legenda span.nome { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; scrollbar-width: none; }
+  .chip { border: 1px solid var(--line); background: var(--card); border-radius: 16px; padding: 5px 13px;
+    white-space: nowrap; cursor: pointer; font-size: 13px; color: var(--muted); }
+  .chip.on { background: var(--acc); color: var(--accent-ink); border-color: var(--acc); }
+
+  .dia { font-size: 14px; font-weight: 700; margin: 18px 4px 6px; }
+  .dia small { color: var(--muted); font-weight: 500; }
+  .lista { background: var(--card); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
+  .card .lista { box-shadow: none; border-radius: 0; margin: 0 -16px -16px; }
+  .item { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-top: 1px solid var(--line); cursor: pointer; }
   .item:first-child { border-top: 0; }
+  .ico { width: 40px; height: 40px; border-radius: 20px; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 19px; flex: none; }
   .item .txt { flex: 1; min-width: 0; }
-  .item .nome { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .item .sub { color: var(--muted); font-size: 13px; }
-  .item .val { text-align: right; white-space: nowrap; }
+  .item .nome { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; font-size: 14.5px; }
+  .item .sub { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .val { text-align: right; white-space: nowrap; font-weight: 650; font-size: 14.5px; }
+  .item .val .sub { font-weight: 400; }
+  .estado { display: block; font-size: 11px; font-weight: 600; margin-top: 2px; }
+  .estado.ok { color: var(--green); } .estado.venc { color: var(--red); } .estado.ab { color: var(--muted); font-weight: 500; }
   .item.pago .nome { color: var(--muted); }
-  .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 8px; margin-left: 4px; }
-  .tag.venc { background: var(--red-bg); color: var(--red); }
-  .tag.ok { background: var(--green-bg); color: var(--green); }
-  .vazio { padding: 14px 12px; color: var(--muted); }
+  .vazio { padding: 14px; color: var(--muted); text-align: center; }
 
-  .barra { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
-    display: flex; justify-content: space-around; align-items: center; padding: 6px 0 calc(6px + env(safe-area-inset-bottom)); }
-  .barra button { background: none; border: 0; color: var(--muted); font-size: 12px; padding: 6px 12px; cursor: pointer; }
-  .barra button.on { color: var(--accent); font-weight: 600; }
-  .barra .mais { width: 52px; height: 52px; border-radius: 26px; background: var(--accent); color: var(--accent-ink);
-    font-size: 28px; line-height: 1; margin-top: -24px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  .barra { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); box-shadow: 0 -2px 14px rgba(20,35,70,.08);
+    display: flex; justify-content: space-around; align-items: center; padding: 6px 4px calc(8px + env(safe-area-inset-bottom)); z-index: 6; }
+  .barra button { background: none; border: 0; color: var(--muted); font-size: 11px; padding: 4px 6px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 62px; }
+  .barra button svg { width: 22px; height: 22px; }
+  .barra button.on { color: var(--acc); font-weight: 600; }
+  .barra button:disabled { opacity: .45; }
+  .barra .mais { width: 56px; height: 56px; min-width: 56px; border-radius: 28px; background: linear-gradient(135deg, var(--acc-2), var(--acc));
+    color: #fff; font-size: 30px; line-height: 1; margin-top: -30px; box-shadow: 0 4px 14px rgba(36,80,184,.4); }
 
-  .fundo { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; align-items: flex-end; justify-content: center; z-index: 10; }
+  .fundo { position: fixed; inset: 0; background: rgba(15,20,35,.35); display: none; align-items: flex-end; justify-content: center; z-index: 10; }
   .fundo.on { display: flex; }
-  .folha { background: var(--card); width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto;
-    border-radius: 16px 16px 0 0; padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); }
+  .folha { background: var(--card); width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto;
+    border-radius: 24px 24px 0 0; padding: 18px 16px calc(20px + env(safe-area-inset-bottom)); }
   .folha h3 { margin: 0 0 4px; font-size: 18px; }
   .folha .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
   .campo { margin: 10px 0; }
   .campo label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
-  .campo input, .campo select, .campo textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--line);
-    border-radius: 8px; background: var(--bg); }
+  .campo input, .campo select, .campo textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line);
+    border-radius: 12px; background: var(--bg); }
   .linha2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .dados { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; margin: 8px 0; }
   .dados span:nth-child(odd) { color: var(--muted); }
-  .btn { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card);
+  .btn { width: 100%; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--card);
     cursor: pointer; margin-top: 8px; font-weight: 600; }
-  .btn.pri { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .btn.pri { background: linear-gradient(135deg, var(--acc-2), var(--acc)); color: #fff; border-color: var(--acc); }
   .btn.perigo { color: var(--red); }
   .btn:disabled { opacity: .5; }
-  .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-  .seg button { flex: 1; padding: 8px; border: 0; background: var(--bg); cursor: pointer; }
-  .seg button.on { background: var(--accent); color: var(--accent-ink); }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .seg button { flex: 1; padding: 9px; border: 0; background: var(--bg); cursor: pointer; }
+  .seg button.on { background: var(--acc); color: #fff; }
   .check { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
-  .check input { width: 20px; height: 20px; }
-  .links a { display: block; color: var(--accent); margin: 2px 0; }
+  .check input { width: 20px; height: 20px; accent-color: var(--acc); }
+  .links a { display: block; color: var(--acc); margin: 2px 0; }
   .aviso { font-size: 13px; color: var(--muted); margin-top: 4px; }
 
-  .login { text-align: center; padding: 40px 0; }
-  .login #botaoGoogle { display: inline-block; margin-top: 8px; min-height: 44px; }
-  .rodape { text-align: center; color: var(--muted); font-size: 13px; margin: 24px 0 8px; }
-  .rodape button { background: none; border: 0; color: var(--accent); text-decoration: underline; cursor: pointer; padding: 0 4px; }
-  .toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: var(--ink); color: var(--bg);
-    padding: 8px 14px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
+  .login { text-align: center; padding: 60px 0; }
+  .login .marca { width: 72px; height: 72px; border-radius: 22px; margin: 0 auto 14px; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--acc-2), var(--acc)); color: #fff; font-weight: 800; font-size: 26px; }
+  .login #botaoGoogle { display: inline-block; margin-top: 10px; min-height: 44px; }
+  .rodape { text-align: center; color: var(--muted); font-size: 12px; margin: 22px 0 8px; }
+  .rodape button { background: none; border: 0; color: var(--acc); text-decoration: underline; cursor: pointer; padding: 0 4px; }
+  .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: var(--ink); color: #fff;
+    padding: 9px 16px; border-radius: 12px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
   .toast.on { opacity: 1; }
-  .carregando { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: var(--accent); transform: scaleX(0);
+  .carregando { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: var(--acc); transform: scaleX(0);
     transform-origin: left; transition: transform .3s; z-index: 30; }
   .carregando.on { transform: scaleX(.8); transition: transform 4s; }
-  .erro { background: var(--red-bg); color: var(--red); padding: 12px; border-radius: 10px; margin: 16px 0; }
+  .erro { background: var(--red-bg); color: var(--red); padding: 12px; border-radius: 12px; margin: 16px 0; }
 </style>
 </head>
 <body>
 <div class="carregando" id="carregando"></div>
-<div class="wrap">
-  <header>
-    <button class="nav" id="ant" aria-label="Mês anterior">‹</button>
-    <h1 id="titulo">Finanças</h1>
-    <button class="nav" id="prox" aria-label="Próximo mês">›</button>
-  </header>
-  <div id="conteudo"><p class="vazio">Carregando…</p></div>
-</div>
+<div class="topo"><div class="mesnav">
+  <button class="nav" id="ant" aria-label="Mês anterior">‹</button>
+  <div class="mes" id="titulo">Finanças</div>
+  <button class="nav" id="prox" aria-label="Próximo mês">›</button>
+</div></div>
+<div class="wrap"><div id="conteudo"><p class="vazio">Carregando…</p></div></div>
 
 <nav class="barra">
-  <button class="on">Mês</button>
+  <button class="on" data-aba="principal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span>Principal</span></button>
+  <button data-aba="transacoes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg><span>Transações</span></button>
   <button class="mais" id="btnNovo" aria-label="Novo lançamento">+</button>
-  <button disabled>Resumo<br><small>em breve</small></button>
+  <button disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Resumo</span></button>
+  <button disabled><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span>Mais</span></button>
 </nav>
 
 <div class="fundo" id="fundo"><div class="folha" id="folha"></div></div>
@@ -147,7 +176,7 @@ let SESSAO = ler('fin_sessao');
 function mostrarLogin(msg) {
   SESSAO = null; guardar('fin_sessao', null);
   $('titulo').textContent = 'Finanças';
-  $('conteudo').innerHTML = `<div class="login"><p>Entre com a sua conta Google.</p>${msg ? `<div class="erro">${esc(msg)}</div>` : ''}<div id="botaoGoogle"></div></div>`;
+  $('conteudo').innerHTML = `<div class="login"><div class="marca">R$</div><p>Entre com a sua conta Google.</p>${msg ? `<div class="erro">${esc(msg)}</div>` : ''}<div id="botaoGoogle"></div></div>`;
   desenharBotao();
 }
 function desenharBotao() {
@@ -230,59 +259,135 @@ function filtrados() {
   return st.itens.filter(i => i.mes === st.mes && (st.pessoa === 'Todos' || i.pessoa === st.pessoa));
 }
 
+// ---------- telas ----------
+
+const CAT = {
+  'Cartões de Crédito': ['💳', '#efe6d2'], 'Contas (água/luz/internet)': ['💡', '#fdf1cf'], 'Dívidas/Parcelas': ['🧾', '#ece7f6'],
+  'Educação': ['🎓', '#e3edf7'], 'Empresa': ['💼', '#e8e6e1'], 'Impostos': ['🏛️', '#ebe9e4'], 'Investimentos': ['📈', '#e3f2e9'],
+  'Lazer': ['🎉', '#fbe8ef'], 'Mercado': ['🛒', '#e6f3e4'], 'Moradia': ['🏠', '#f6e9dc'], 'Outros': ['📌', '#eeece7'],
+  'Pets': ['🐾', '#f3ebe0'], 'Presentes': ['🎁', '#fbe8e5'], 'Saúde': ['🩺', '#e3f0f2'], 'Transporte': ['🚗', '#e5ebf5'], 'Viagens': ['✈️', '#e3eef8'],
+};
+const CORES = ['#e0892f', '#2a9d8f', '#8e6bbf', '#c9a227', '#d16ba5', '#9aa0a6'];
+const DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+st.aba = 'principal';
+st.oculto = ler('fin_oculto') === '1';
+const m = n => st.oculto ? 'R$ ••••' : brl(n);
+const icone = i => {
+  const [e, bg] = i.tipo === 'Receita' ? ['💰', '#e3f2e9'] : (CAT[i.categoria] || ['📌', '#eeece7']);
+  return `<span class="ico" style="background:${bg}">${e}</span>`;
+};
+const OLHO = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${'{X}'}</svg>`;
+
 function render() {
-  $('titulo').textContent = nomeMes(st.mes);
+  const [ano, mm] = st.mes.split('-');
+  $('titulo').innerHTML = `${MESES[Number(mm) - 1]} <small>${ano}</small>`;
   const k = st.meses.indexOf(st.mes);
   $('ant').disabled = k <= 0; $('prox').disabled = k >= st.meses.length - 1;
-
-  const itens = filtrados();
-  const soma = f => itens.filter(f).reduce((s, i) => s + (Number(i.valor_brl) || 0), 0);
-  const rec = soma(i => i.tipo === 'Receita'), desp = soma(i => i.tipo === 'Despesa');
-  const pago = soma(i => i.tipo === 'Despesa' && i.pago);
-  const abertos = itens.filter(i => i.tipo === 'Despesa' && !i.pago && Number(i.valor_brl) > 0).length;
-
-  const pessoas = ['Todos'].concat(st.cad['Pessoas'] || []);
-  const situacoes = ['Todos', 'A pagar', 'Pagos'];
-  let h = `
-    <div class="placar">
-      <div class="kpi"><small>Receitas</small><b>${brl(rec)}</b></div>
-      <div class="kpi"><small>Despesas</small><b>${brl(desp)}</b></div>
-      <div class="kpi"><small>Saldo</small><b class="${rec - desp < 0 ? 'neg' : ''}">${brl(rec - desp)}</b></div>
-      <div class="kpi"><small>Já pago</small><b>${brl(pago)}</b></div>
-      <div class="kpi"><small>A pagar</small><b>${brl(desp - pago)}</b></div>
-      <div class="kpi"><small>Em aberto</small><b>${abertos} ${abertos === 1 ? 'conta' : 'contas'}</b></div>
-    </div>
-    <div class="chips">${pessoas.map(p => `<button class="chip ${p === st.pessoa ? 'on' : ''}" data-pessoa="${esc(p)}">${esc(p)}</button>`).join('')}</div>
-    <div class="chips">${situacoes.map(p => `<button class="chip ${p === st.situacao ? 'on' : ''}" data-sit="${esc(p)}">${esc(p)}</button>`).join('')}</div>`;
-
-  const ok = i => st.situacao === 'Todos' || (st.situacao === 'Pagos' ? i.pago : !i.pago);
-  const porVenc = (a, b) => (a.vencimento || '9999').localeCompare(b.vencimento || '9999');
-  const secoes = [
-    ['A pagar', itens.filter(i => i.tipo === 'Despesa' && !i.pago && ok(i)).sort(porVenc)],
-    ['Pagas', itens.filter(i => i.tipo === 'Despesa' && i.pago && ok(i)).sort(porVenc)],
-    ['Receitas', itens.filter(i => i.tipo === 'Receita' && ok(i)).sort(porVenc)],
-  ];
-  for (const [nome, lista] of secoes) {
-    if (!lista.length) continue;
-    h += `<h2>${nome}</h2><div class="lista">${lista.map(linha).join('')}</div>`;
-  }
-  if (!secoes.some(s => s[1].length)) h += `<p class="vazio">Nada aqui com esses filtros.</p>`;
+  document.querySelectorAll('[data-aba]').forEach(b => b.classList.toggle('on', b.dataset.aba === st.aba));
+  const chipsPessoa = `<div class="chips">${['Todos'].concat(st.cad['Pessoas'] || []).map(p => `<button class="chip ${p === st.pessoa ? 'on' : ''}" data-pessoa="${esc(p)}">${esc(p)}</button>`).join('')}</div>`;
+  let h = chipsPessoa + (st.aba === 'principal' ? telaPrincipal() : telaTransacoes());
   h += `<p class="rodape">Conectado como ${esc(st.usuario)}<button onclick="sair()">Sair</button></p>`;
   $('conteudo').innerHTML = h;
-
   document.querySelectorAll('[data-pessoa]').forEach(b => b.onclick = () => { st.pessoa = b.dataset.pessoa; render(); });
   document.querySelectorAll('[data-sit]').forEach(b => b.onclick = () => { st.situacao = b.dataset.sit; render(); });
   document.querySelectorAll('.item').forEach(el => el.onclick = () => detalhe(el.dataset.id));
+  document.querySelectorAll('[data-ir]').forEach(el => el.onclick = () => { st.aba = 'transacoes'; st.situacao = el.dataset.ir; render(); window.scrollTo(0, 0); });
+  if ($('olho')) $('olho').onclick = () => { st.oculto = !st.oculto; guardar('fin_oculto', st.oculto ? '1' : '0'); render(); };
+}
+
+function totais(itens) {
+  const soma = f => itens.filter(f).reduce((s, i) => s + (Number(i.valor_brl) || 0), 0);
+  const desp = soma(i => i.tipo === 'Despesa'), pago = soma(i => i.tipo === 'Despesa' && i.pago);
+  const abertas = itens.filter(i => i.tipo === 'Despesa' && !i.pago && Number(i.valor_brl) > 0);
+  return { rec: soma(i => i.tipo === 'Receita'), desp, pago, abertas, vencidas: abertas.filter(vencida) };
+}
+const vencida = i => !i.pago && i.vencimento && i.vencimento < st.hoje && i.tipo === 'Despesa' && Number(i.valor_brl) > 0;
+
+function telaPrincipal() {
+  const itens = filtrados();
+  const t = totais(itens);
+  const saldo = t.rec - t.desp;
+  const pct = t.desp ? Math.round(100 * t.pago / t.desp) : 0;
+  let h = `
+    <div class="card hero">
+      <div class="rot">Saldo do mês <button class="olho" id="olho" aria-label="Mostrar ou esconder valores">${OLHO.replace('{X}', st.oculto ? '<path d="M3 3l18 18"/>' : '')}</button></div>
+      <div class="saldo ${saldo < 0 ? 'neg' : ''}">${m(saldo)}</div>
+      <div class="duas">
+        <div><span class="bola up">↑</span><span><small>Receitas</small><b class="verde">${m(t.rec)}</b></span></div>
+        <div><span class="bola down">↓</span><span><small>Despesas</small><b class="vermelho">${m(t.desp)}</b></span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Contas do mês <a data-ir="A pagar">Ver a pagar</a></h2>
+      <div class="linhaprog"><span><b style="color:var(--ink)">${m(t.pago)}</b> pagos</span><span>${pct}%</span></div>
+      <div class="barraprog"><i style="width:${pct}%"></i></div>
+      <div class="linhaprog"><span>Faltam ${m(t.desp - t.pago)}</span><span>${t.abertas.length} ${t.abertas.length === 1 ? 'conta aberta' : 'contas abertas'}</span></div>
+      ${t.vencidas.length ? `<div class="alerta" data-ir="A pagar">${t.vencidas.length} ${t.vencidas.length === 1 ? 'conta vencida' : 'contas vencidas'}: ${esc(t.vencidas.map(i => i.item).slice(0, 3).join(', '))}${t.vencidas.length > 3 ? '…' : ''}</div>` : ''}
+    </div>`;
+
+  const prox = t.abertas.slice().sort((a, b) => (a.vencimento || '9999').localeCompare(b.vencimento || '9999')).slice(0, 4);
+  if (prox.length) h += `<div class="card"><h2>Próximos vencimentos <a data-ir="A pagar">Ver todos</a></h2><div class="lista">${prox.map(linha).join('')}</div></div>`;
+
+  const porCat = {};
+  itens.filter(i => i.tipo === 'Despesa').forEach(i => (porCat[i.categoria || 'Outros'] = (porCat[i.categoria || 'Outros'] || 0) + (Number(i.valor_brl) || 0)));
+  let cats = Object.entries(porCat).filter(c => c[1] > 0).sort((a, b) => b[1] - a[1]);
+  if (cats.length > 5) cats = cats.slice(0, 5).concat([['Outras', cats.slice(5).reduce((s, c) => s + c[1], 0)]]);
+  if (cats.length) h += `<div class="card"><h2>Despesas por categoria</h2><div class="rosca">${rosca(cats)}<div class="legenda">${cats.map((c, n) => `<div><span class="ponto" style="background:${CORES[n % CORES.length]}"></span><span class="nome">${esc(c[0])}</span><b>${m(c[1])}</b></div>`).join('')}</div></div></div>`;
+
+  const cartoes = itens.filter(i => i.categoria === 'Cartões de Crédito' && i.tipo === 'Despesa').sort((a, b) => (a.vencimento || '').localeCompare(b.vencimento || ''));
+  if (cartoes.length) h += `<div class="card"><h2>Cartões de crédito</h2><div class="lista">${cartoes.map(linha).join('')}</div></div>`;
+  return h;
+}
+
+function rosca(cats) {
+  const total = cats.reduce((s, c) => s + c[1], 0), R = 44, C = 2 * Math.PI * R;
+  let acum = 0;
+  const arcos = cats.map((c, n) => {
+    const len = C * c[1] / total;
+    const a = `<circle r="${R}" cx="60" cy="60" fill="none" stroke="${CORES[n % CORES.length]}" stroke-width="18" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-acum}" transform="rotate(-90 60 60)"/>`;
+    acum += len; return a;
+  }).join('');
+  return `<svg width="120" height="120" viewBox="0 0 120 120">${arcos}<text x="60" y="57" text-anchor="middle" font-size="10" fill="#7d8494">Total</text><text x="60" y="72" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2430">${st.oculto ? '••••' : (total / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil'}</text></svg>`;
+}
+
+function telaTransacoes() {
+  const itens = filtrados();
+  const ok = i => st.situacao === 'Todos' || (st.situacao === 'Pagos' ? i.pago : !i.pago);
+  const lista = itens.filter(ok).sort((a, b) => (a.vencimento || '9999').localeCompare(b.vencimento || '9999') || (a.tipo === 'Receita' ? -1 : 1));
+  const t = totais(itens);
+  let h = `<div class="chips">${['Todos', 'A pagar', 'Pagos'].map(p => `<button class="chip ${p === st.situacao ? 'on' : ''}" data-sit="${esc(p)}">${esc(p)}</button>`).join('')}</div>
+    <div class="card" style="display:flex;justify-content:space-around;text-align:center;padding:12px">
+      <div><small style="color:var(--muted)">Receitas</small><br><b class="verde">${m(t.rec)}</b></div>
+      <div><small style="color:var(--muted)">Despesas</small><br><b class="vermelho">${m(t.desp)}</b></div>
+      <div><small style="color:var(--muted)">A pagar</small><br><b>${m(t.desp - t.pago)}</b></div>
+    </div>`;
+  if (!lista.length) return h + '<p class="vazio">Nada aqui com esses filtros.</p>';
+  const grupos = [];
+  lista.forEach(i => { const d = i.vencimento || ''; const g = grupos[grupos.length - 1]; if (g && g.d === d) g.itens.push(i); else grupos.push({ d, itens: [i] }); });
+  const amanha = new Date(st.hoje + 'T12:00:00'); amanha.setDate(amanha.getDate() + 1);
+  const amanhaS = amanha.toISOString().slice(0, 10);
+  grupos.forEach(g => {
+    let rot = 'Sem data';
+    if (g.d) {
+      const dt = new Date(g.d + 'T12:00:00');
+      rot = g.d === st.hoje ? 'Hoje' : g.d === amanhaS ? 'Amanhã' : DIAS[dt.getDay()];
+      rot += ` <small>${dataBR(g.d)}</small>`;
+    }
+    h += `<div class="dia">${rot}</div><div class="lista">${g.itens.map(linha).join('')}</div>`;
+  });
+  return h;
 }
 
 function linha(i) {
-  const vencida = !i.pago && i.vencimento && i.vencimento < st.hoje && i.tipo === 'Despesa' && Number(i.valor_brl) > 0;
-  const sub = [i.vencimento ? (i.tipo === 'Receita' ? 'dia ' : 'vence ') + dataBR(i.vencimento) : '', i.pessoa, i.parcela].filter(Boolean).join(' · ');
-  const tag = vencida ? '<span class="tag venc">vencida</span>' : (i.pago ? `<span class="tag ok">${i.tipo === 'Receita' ? 'recebido' : 'pago'}</span>` : '');
-  const valor = i.moeda === 'USD' ? `${usd(i.valor)}<div class="sub">${brl(i.valor_brl)}</div>` : brl(i.valor_brl);
-  return `<div class="item ${i.pago ? 'pago' : ''}" data-id="${esc(i.id)}">
-    <div class="txt"><div class="nome">${esc(i.item)}${i.comprovante ? ' 📎' : ''}</div><div class="sub">${esc(sub)}${tag}</div></div>
-    <div class="val">${valor}</div></div>`;
+  const rec = i.tipo === 'Receita';
+  const estado = i.pago ? `<span class="estado ok">✓ ${rec ? 'recebido' : 'pago'}</span>`
+    : vencida(i) ? '<span class="estado venc">vencida</span>'
+    : i.vencimento ? `<span class="estado ab">${rec ? 'a receber' : 'vence'} ${dataBR(i.vencimento)}</span>` : '';
+  const sub = [i.categoria, i.pessoa, i.parcela].filter(Boolean).join(' · ');
+  const valor = i.moeda === 'USD' && !st.oculto ? `${usd(i.valor)}<span class="sub" style="display:block">${brl(i.valor_brl)}</span>` : m(i.valor_brl);
+  return `<div class="item ${i.pago ? 'pago' : ''}" data-id="${esc(i.id)}">${icone(i)}
+    <div class="txt"><div class="nome">${esc(i.item)}${i.comprovante ? ' 📎' : ''}</div><div class="sub">${esc(sub)}</div></div>
+    <div class="val ${rec ? 'verde' : ''}">${valor}${estado}</div></div>`;
 }
 
 // ---------- folha (detalhe e novo) ----------
@@ -445,6 +550,7 @@ function novo() {
 }
 
 $('btnNovo').onclick = novo;
+document.querySelectorAll('[data-aba]').forEach(b => b.onclick = () => { st.aba = b.dataset.aba; render(); window.scrollTo(0, 0); });
 $('ant').onclick = () => abrirMes(st.meses[st.meses.indexOf(st.mes) - 1]);
 $('prox').onclick = () => abrirMes(st.meses[st.meses.indexOf(st.mes) + 1]);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
