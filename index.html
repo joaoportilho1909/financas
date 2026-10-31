@@ -440,6 +440,7 @@ function detalhe(id) {
       ${i.forma_pgto ? `<span>Forma</span><span>${esc(i.forma_pgto)}</span>` : ''}
       <span>Previsto</span><span>${i.moeda === 'USD' ? usd(i.valor_previsto) : brl(i.valor_previsto)}</span>
       <span>Valor do mês</span><span><b>${i.moeda === 'USD' ? usd(i.valor) + ' = ' + brl(i.valor_brl) : brl(i.valor_brl)}</b></span>
+      ${i.moeda === 'USD' ? `<span>Câmbio</span><span>${fmtCambio(i.cambio || st.cambios[i.mes])} ${segueRef(i) ? '(referência do mês)' : '(câmbio real)'}</span>` : ''}
       ${i.pago ? `<span>${receita ? 'Recebido' : 'Pago'}</span><span>${dataBR(i.pago_em)}${i.pago_por ? ' por ' + esc(quemCurto(i.pago_por)) : ''}</span>` : ''}
     </div>
     <button class="btn pri" id="bPago">${i.pago ? 'Desfazer ' + (receita ? 'recebido' : 'pago') : 'Marcar como ' + (receita ? 'recebido' : 'pago')}</button>
@@ -493,8 +494,11 @@ function detalhe(id) {
   };
   if ($('arqFatura')) $('arqFatura').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
-    try { previaFatura(i, lerFaturaNubank(await f.text()), f.name); }
-    catch (err) { erro(err); e.target.value = ''; }
+    try {
+      if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf')
+        lerPDFcomSenha(f, '', itens => previaFatura(i, lerFaturaPDF(itens, i.vencimento || i.mes + '-28'), f.name), () => detalhe(i.id));
+      else previaFatura(i, { banco: 'Nubank', linhas: lerFaturaNubank(await f.text()) }, f.name);
+    } catch (err) { erro(err); e.target.value = ''; }
   };
   if ($('bExcluir')) $('bExcluir').onclick = async e => {
     if (e.target.dataset.conf !== '1') { e.target.dataset.conf = '1'; e.target.textContent = 'Toque de novo para excluir'; return; }
@@ -588,7 +592,7 @@ const comprasDe = id => (st.compras || []).filter(c => c.lanc_id === id);
 // Soma por categoria: compras, IOF e estornos; pagamento antecipado fica de fora.
 function gradeCategorias(cs) {
   const g = {};
-  cs.filter(c => c.tipo !== 'pagamento').forEach(c => { const k = c.categoria || 'Outros'; g[k] = (g[k] || 0) + Number(c.valor); });
+  cs.filter(c => c.tipo !== 'pagamento' && c.tipo !== 'saldo').forEach(c => { const k = c.categoria || 'Outros'; g[k] = (g[k] || 0) + Number(c.valor); });
   return Object.entries(g).filter(c => Math.abs(c[1]) >= 0.005).sort((a, b) => b[1] - a[1]);
 }
 function htmlGrade(cats) {
@@ -596,7 +600,7 @@ function htmlGrade(cats) {
   return `<div class="grade">${cats.map(([c, v]) => `<div class="g">${icone({ categoria: c })}<span class="nome">${esc(c)}</span><b>${m(v)}</b><span class="barra-cat"><i style="width:${Math.max(0, 100 * v / max).toFixed(1)}%"></i></span></div>`).join('')}</div>`;
 }
 function listaCompras(cs) {
-  return cs.slice().sort((a, b) => b.data.localeCompare(a.data)).map(c => `<div><span class="d">${dataBR(c.data)}</span><span class="t">${esc(c.descricao)}${c.parcela ? ' <small>' + esc(c.parcela) + '</small>' : ''}<br><small>${esc(c.categoria || 'pagamento')}</small></span><b>${m(c.valor)}</b></div>`).join('');
+  return cs.slice().sort((a, b) => b.data.localeCompare(a.data)).map(c => `<div><span class="d">${dataBR(c.data)}</span><span class="t">${esc(c.descricao)}${c.parcela ? ' <small>' + esc(c.parcela) + '</small>' : ''}<br><small>${esc(c.categoria || (c.tipo === 'saldo' ? 'saldo anterior' : 'pagamento'))}</small></span><b>${m(c.valor)}</b></div>`).join('');
 }
 
 function secaoFatura(i) {
@@ -608,17 +612,22 @@ function secaoFatura(i) {
     if (pag) h += `<div class="aviso">Pagamentos antecipados na fatura: ${m(pag)}</div>`;
     h += `<details class="compras"><summary>Ver as ${cs.length} linhas (importado por ${esc(quemCurto(cs[0].importado_por))} em ${esc(dataBR(cs[0].importado_em) + ' às ' + String(cs[0].importado_em).slice(11))})</summary>${listaCompras(cs)}</details>`;
   } else h += '<div class="aviso" style="margin-bottom:8px">Nenhuma fatura importada para este mês.</div>';
-  return h + `<label class="btn">${cs.length ? 'Importar de novo' : 'Importar fatura'} (CSV do Nubank)<input type="file" id="arqFatura" accept=".csv,text/csv" hidden></label></div>`;
+  return h + `<label class="btn">${cs.length ? 'Importar de novo' : 'Importar fatura'} (CSV do Nubank ou PDF do BB)<input type="file" id="arqFatura" accept=".csv,text/csv,.pdf,application/pdf" hidden></label></div>`;
 }
 
 // Mostra o que vai ser gravado; só grava ao confirmar.
-function previaFatura(i, linhas, arquivo) {
-  const total = Math.round(linhas.reduce((s, l) => s + l.valor, 0) * 100) / 100;
+// fat = { banco, linhas, total (se o arquivo traz o total; senão é a soma das linhas), avisos }.
+function previaFatura(i, fat, arquivo) {
+  const linhas = fat.linhas;
+  const soma = Math.round(linhas.reduce((s, l) => s + l.valor, 0) * 100) / 100;
+  const total = fat.total === undefined ? soma : fat.total;
   const pag = linhas.filter(l => l.tipo === 'pagamento').reduce((s, l) => s + l.valor, 0);
-  const datas = linhas.map(l => l.data).sort();
+  const saldo = linhas.filter(l => l.tipo === 'saldo').reduce((s, l) => s + l.valor, 0);
+  const datas = linhas.filter(l => l.tipo !== 'saldo').map(l => l.data).sort();
   const antes = comprasDe(i.id).length;
-  const avisos = [];
-  if (!/nubank/i.test(i.item)) avisos.push(`Esse cartão não parece ser Nubank (${i.item}).`);
+  const avisos = (fat.avisos || []).slice();
+  if (!new RegExp(fat.banco === 'BB' ? '\\bBB\\b' : fat.banco, 'i').test(i.item)) avisos.push(`Esse cartão não parece ser ${fat.banco} (${i.item}).`);
+  if (Math.abs(soma - total) > 0.01) avisos.push(`As linhas somam ${brl(soma)} e o total da fatura é ${brl(total)}. Confira antes de importar.`);
   if (i.vencimento && datas[datas.length - 1] > i.vencimento) avisos.push(`Tem compra depois do vencimento (${dataBR(i.vencimento)}). Confira se é o mês certo.`);
   if (antes) avisos.push(`Substitui a importação anterior (${antes} linhas).`);
   abrirFolha(`
@@ -626,9 +635,11 @@ function previaFatura(i, linhas, arquivo) {
     <div class="sub">${esc(i.item)} · ${esc(nomeMes(i.mes))}</div>
     <div class="dados">
       <span>Arquivo</span><span>${esc(arquivo)}</span>
-      <span>Compras</span><span>${linhas.filter(l => l.tipo !== 'pagamento').length}, de ${dataBR(datas[0])} a ${dataBR(datas[datas.length - 1])}</span>
+      <span>Banco</span><span>${esc(fat.banco)}</span>
+      ${saldo ? `<span>Saldo anterior</span><span>${brl(saldo)}</span>` : ''}
+      <span>Compras</span><span>${linhas.filter(l => l.tipo !== 'pagamento' && l.tipo !== 'saldo').length}, de ${dataBR(datas[0])} a ${dataBR(datas[datas.length - 1])}</span>
       ${pag ? `<span>Pagamentos</span><span>${brl(pag)}</span>` : ''}
-      <span>Total do arquivo</span><span><b>${brl(total)}</b></span>
+      <span>Total da fatura</span><span><b>${brl(total)}</b></span>
       <span>Valor do mês hoje</span><span>${brl(i.valor_brl)}</span>
     </div>
     ${htmlGrade(gradeCategorias(linhas))}
@@ -649,6 +660,56 @@ function previaFatura(i, linhas, arquivo) {
       atualizarItem(r.item); detalhe(i.id); toast('Fatura importada');
     } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Confirmar importação'; }
   };
+}
+
+// ---------- fatura em PDF ----------
+
+const DINHEIRO_BR = /^R\$\s*-?\d{1,3}(\.\d{3})*,\d{2}$/;
+// "28/10" vira data completa pelo vencimento do cartão no app (mês depois do vencimento é do ano anterior).
+function dataDe(ddmm, ref) {
+  const [d, mm] = ddmm.split('/').map(Number);
+  const a = Number(ref.slice(0, 4)) - (mm > Number(ref.slice(5, 7)) ? 1 : 0);
+  return `${a}-${String(mm).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function lerFaturaPDF(itens, ref) {
+  const tudo = itens.map(i => i.s).join(' ');
+  if (/ourocard|bb\.com\.br/i.test(tudo) && /lançamentos nesta fatura/i.test(tudo)) return lerFaturaBB(itens, ref);
+  throw new Error('Ainda não sei ler a fatura desse banco em PDF.');
+}
+
+// BB (Ourocard): "Lançamentos nesta fatura" em grupos do próprio BB (Saúde, Transporte, Compras parceladas...),
+// cada linha com data, descrição, país e valor; "SALDO FATURA ANTERIOR" sem data; "Total da Fatura" no fim.
+// A categoria vem das regras do app; se elas não souberem (Outros), usa o grupo do BB quando ele existe aqui.
+const GRUPOS_BB = { 'saúde': 'Saúde', 'transporte': 'Transporte', 'supermercados': 'Mercado', 'educação': 'Educação', 'restaurantes': 'Lazer', 'lazer': 'Lazer', 'viagens': 'Viagens', 'turismo': 'Viagens' };
+function lerFaturaBB(itens, ref) {
+  const L = linhasPDF(itens);
+  const linhas = [], avisos = [];
+  let dentro = false, grupo = '', total = null, fecha = '';
+  for (const l of L) {
+    const t = l.texto;
+    let m = t.match(/fatura fechada em (\d{2})\/(\d{2})\/(\d{4})/i);
+    if (m) fecha = `${m[3]}-${m[2]}-${m[1]}`;
+    if (/^lançamentos nesta fatura/i.test(t)) { dentro = true; continue; }
+    if (!dentro) continue;
+    const ult = l.itens[l.itens.length - 1].s.trim();
+    if (/^total da fatura/i.test(t)) { total = numero(ult); break; }
+    if (!DINHEIRO_BR.test(ult)) { if (l.itens.length <= 2 && !/^(data\b|página \d)/i.test(t)) grupo = t.toLowerCase(); continue; }
+    const valor = numero(ult);
+    const desc = l.itens.filter(i => i.x >= 75 && i.x < 440).map(i => i.s).join(' ').replace(/\s+/g, ' ').trim();
+    if (/^saldo fatura anterior/i.test(desc)) { linhas.push({ data: fecha || ref, descricao: 'Saldo fatura anterior', parcela: '', tipo: 'saldo', categoria: '', valor }); continue; }
+    const d = l.itens[0].s.trim();
+    if (!/^\d{2}\/\d{2}$/.test(d)) { avisos.push('Linha que não entendi: ' + t); continue; }
+    const p = desc.match(/\bPARC (\d{2})\/(\d{2})\b/i);
+    const descricao = (p ? desc.replace(p[0], ' ') : desc).replace(/\s+/g, ' ').trim();
+    const tipo = /pagamentos/i.test(grupo) && valor < 0 ? (/pgto|pagamento/i.test(descricao) ? 'pagamento' : 'estorno') : valor < 0 ? 'estorno' : 'compra';
+    let categoria = tipo === 'pagamento' ? '' : categoriaDe(descricao);
+    if (categoria === 'Outros' && GRUPOS_BB[grupo]) categoria = GRUPOS_BB[grupo];
+    linhas.push({ data: dataDe(d, ref), descricao, parcela: p ? `${Number(p[1])}/${Number(p[2])}` : '', tipo, categoria, valor });
+  }
+  if (total === null) throw new Error('Não achei o "Total da Fatura" no PDF do BB.');
+  if (L.filter(l => /\(cartão \d{4}\)/i.test(l.texto)).length > 1) avisos.push('A fatura tem mais de um cartão (adicional); as compras entram todas juntas.');
+  return { banco: 'BB', linhas, total, avisos };
 }
 
 // ---------- PDF (fatura e extrato) ----------
@@ -742,9 +803,12 @@ function casarExtrato(linhas) {
 function mais() {
   abrirFolha(`
     <h3>Mais</h3>
+    <div class="campo"><label>Câmbio real (US$ para R$), referência de cada mês e histórico.</label>
+      <button class="btn" id="bCambioTela" style="margin:0">Câmbio</button></div>
     <div class="campo"><label>Extrato da conta do C6 em PDF, exportado pelo app do banco. O app compara com os lançamentos e marca como pago o que bater, com a data do extrato.</label>
       <label class="btn">Importar extrato do C6<input type="file" id="arqExtrato" accept=".pdf,application/pdf" hidden></label></div>
     <button class="btn" onclick="fecharFolha()">Fechar</button>`);
+  $('bCambioTela').onclick = telaCambio;
   $('arqExtrato').onchange = e => {
     const f = e.target.files[0]; if (!f) return;
     lerPDFcomSenha(f, '', itens => previaExtrato(lerExtratoC6(itens), f.name), mais);
@@ -785,6 +849,111 @@ function previaExtrato(x, arquivo) {
       render(); fecharFolha(); toast(`${novos.length} ${novos.length === 1 ? 'lançamento marcado' : 'lançamentos marcados'} como pago`);
     } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Marcar como pago'; }
   };
+}
+
+// ---------- câmbio ----------
+
+const fmtCambio = n => Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const mesCurto = mes => MESES[Number(mes.slice(5, 7)) - 1].slice(0, 3).toLowerCase() + '/' + mes.slice(0, 4);
+const usdDe = mv => numero((String(mv.movimento).match(/US\$\s*([\d.,]+)/) || [])[1] || 'x');
+// Lançamento em dólar segue a referência do mês quando o câmbio dele está vazio ou igual a ela; senão é câmbio real.
+const segueRef = i => i.cambio === '' || i.cambio === null || Math.abs(Number(i.cambio) - Number(st.cambios[i.mes])) < 1e-6;
+
+// Meses seguidos com a mesma referência viram uma faixa ("nov/2026 a jan/2028").
+function faixasRef(meses) {
+  const f = [];
+  meses.forEach(mes => { const c = st.cambios[mes], u = f[f.length - 1]; if (u && u.c === c) u.fim = mes; else f.push({ ini: mes, fim: mes, c }); });
+  return f;
+}
+const textoFaixas = meses => faixasRef(meses).map(f => `${mesCurto(f.ini)}${f.fim !== f.ini ? ' a ' + mesCurto(f.fim) : ''}: ${fmtCambio(f.c)}`).join('; ');
+
+function telaCambio() {
+  const feitos = (st.movs || []).filter(x => /^câmbio/i.test(x.movimento)).sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  abrirFolha(`
+    <h3>Câmbio</h3>
+    <div class="sub">Referência de ${esc(nomeMes(st.mes))}: ${fmtCambio(st.cambios[st.mes])}</div>
+    <button class="btn pri" id="bNovoCambio">Registrar câmbio</button>
+    <div class="bloco">Câmbios feitos (${feitos.length})</div>
+    ${feitos.length ? `<details class="compras" open><summary>Ver</summary>${feitos.map(c => {
+      const u = usdDe(c);
+      return `<div><span class="d">${dataBR(c.data)}</span><span class="t">${esc(c.movimento)}<br><small>VET ${isFinite(u) && u > 0 ? fmtCambio(c.valor_brl / u) : '?'} · ${esc(nomeMes(c.mes))}</small></span><b>${brl(c.valor_brl)}</b></div>`;
+    }).join('')}</details>` : '<div class="aviso">Nenhum câmbio registrado.</div>'}
+    <div class="bloco">Referência por mês</div>
+    <div class="dados">${faixasRef(st.meses).map(f => `<span>${mesCurto(f.ini)}${f.fim !== f.ini ? ' a ' + mesCurto(f.fim) : ''}</span><span>${fmtCambio(f.c)}</span>`).join('')}</div>
+    <div class="campo"><label>Mudar a referência</label>
+      <div class="linha2"><select id="refMes">${st.meses.map(x => `<option value="${x}" ${x === st.mes ? 'selected' : ''}>${esc(nomeMes(x))}</option>`).join('')}</select>
+      <input id="refVal" inputmode="decimal" placeholder="${fmtCambio(st.cambios[st.mes])}"></div></div>
+    <label class="check"><input type="checkbox" id="refSeg"> Aplicar também aos meses seguintes</label>
+    <button class="btn" id="bRef">Salvar referência</button>
+    <div class="aviso">Ao mudar a referência, são recalculados os lançamentos em dólar ainda não recebidos que seguem a referência antiga. Câmbio real e lançamento já recebido não mudam.</div>
+    <button class="btn" id="bVoltar">Voltar</button>`);
+  $('bVoltar').onclick = mais;
+  $('bNovoCambio').onclick = novoCambio;
+  $('bRef').onclick = e => {
+    const v = numero($('refVal').value);
+    if (!(v > 0)) return toast('Câmbio inválido');
+    const mes = $('refMes').value;
+    aplicarRef(e.target, $('refSeg').checked ? st.meses.filter(x => x >= mes) : [mes], v);
+  };
+}
+
+async function aplicarRef(botao, meses, v) {
+  botao.disabled = true;
+  try {
+    const r = await call('definirCambioRef', meses, v);
+    Object.assign(st.cambios, r.cambios);
+    r.itens.forEach(n => { const k = st.itens.findIndex(i => i.id === n.id); if (k >= 0) st.itens[k] = n; });
+    render(); telaCambio();
+    toast(`Referência salva${r.itens.length ? `, ${r.itens.length} ${r.itens.length === 1 ? 'lançamento recalculado' : 'lançamentos recalculados'}` : ''}`);
+  } catch (err) { erro(err); botao.disabled = false; }
+}
+
+function novoCambio() {
+  const abertos = st.itens.filter(i => i.moeda === 'USD' && !i.pago).sort((a, b) => a.mes.localeCompare(b.mes) || a.item.localeCompare(b.item));
+  abrirFolha(`
+    <h3>Registrar câmbio</h3>
+    <div class="campo"><label>Data</label><input type="date" id="cData" value="${st.hoje}"></div>
+    <div class="linha2">
+      <div class="campo"><label>US$ enviados</label><input id="cUsd" inputmode="decimal"></div>
+      <div class="campo"><label>R$ que caíram (líquido)</label><input id="cBrl" inputmode="decimal"></div>
+    </div>
+    <div class="aviso" id="cVet">VET: preencha US$ e R$</div>
+    <div class="campo"><label>Aplicar a um lançamento em dólar (fica com este câmbio e marcado como recebido nesta data)</label>
+      <select id="cLanc"><option value="">Nenhum</option>${abertos.map(i => `<option value="${esc(i.id)}">${esc(i.item)} · ${esc(nomeMes(i.mes))} · ${usd(i.valor)}</option>`).join('')}</select></div>
+    <div class="campo"><label>Observação (cotação, custo, IOF)</label><input id="cObs"></div>
+    <button class="btn pri" id="bCambio">Salvar câmbio</button>
+    <button class="btn" id="bVoltar">Voltar</button>`);
+  const vet = () => { const u = numero($('cUsd').value), r = numero($('cBrl').value); return u > 0 && r > 0 ? r / u : NaN; };
+  ['cUsd', 'cBrl'].forEach(k => ($(k).oninput = () => { const v = vet(); $('cVet').textContent = isFinite(v) ? 'VET: ' + fmtCambio(v) : 'VET: preencha US$ e R$'; }));
+  $('bVoltar').onclick = telaCambio;
+  $('bCambio').onclick = async e => {
+    if (!isFinite(vet())) return toast('Preencha US$ e R$');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test($('cData').value)) return toast('Data inválida');
+    e.target.disabled = true; e.target.textContent = 'Gravando…';
+    try {
+      const r = await call('registrarCambio', { data: $('cData').value, usd: numero($('cUsd').value), brl: numero($('cBrl').value), lancId: $('cLanc').value, obs: $('cObs').value.trim() });
+      (st.movs = st.movs || []).push(r.mov);
+      if (r.item) { const k = st.itens.findIndex(i => i.id === r.item.id); if (k >= 0) st.itens[k] = r.item; }
+      render();
+      perguntarRef(r.vet, r.mov.mes);
+    } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Salvar câmbio'; }
+  };
+}
+
+// Depois de um câmbio real, pergunta se o VET vira a referência dos meses seguintes (decisão do João: perguntar a cada vez).
+function perguntarRef(vet, mes) {
+  const seguintes = st.meses.filter(x => x > mes);
+  if (!seguintes.length) { telaCambio(); return toast('Câmbio registrado'); }
+  const afetados = st.itens.filter(i => i.moeda === 'USD' && !i.pago && seguintes.includes(i.mes) && segueRef(i) && Number(i.cambio) !== vet);
+  abrirFolha(`
+    <h3>Câmbio registrado</h3>
+    <div class="sub">VET ${fmtCambio(vet)}</div>
+    <div class="campo">Usar ${fmtCambio(vet)} como referência de ${esc(nomeMes(seguintes[0]))} até ${esc(nomeMes(seguintes[seguintes.length - 1]))}?</div>
+    <div class="aviso">Hoje: ${esc(textoFaixas(seguintes))}. Recalcula ${afetados.length} ${afetados.length === 1 ? 'lançamento em dólar ainda não recebido' : 'lançamentos em dólar ainda não recebidos'}.</div>
+    <button class="btn pri" id="bSim">Sim, atualizar</button>
+    <button class="btn" id="bNao">Não, manter</button>`);
+  $('bNao').onclick = () => { telaCambio(); toast('Câmbio registrado'); };
+  $('bSim').onclick = e => aplicarRef(e.target, seguintes, vet);
 }
 
 function novo() {
