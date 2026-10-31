@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6f50">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Finanças</title>
+<style>
+  :root {
+    --bg: #f4f5f2; --card: #ffffff; --ink: #1d2320; --muted: #6b736e; --line: #e2e5e0;
+    --accent: #1f6f50; --accent-ink: #ffffff; --red: #b3261e; --red-bg: #fbeceb;
+    --green: #1f6f50; --green-bg: #e6f2ec; --shadow: 0 1px 2px rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121513; --card: #1b1f1d; --ink: #e8ebe9; --muted: #9aa39e; --line: #2b302d;
+      --accent: #5cc095; --accent-ink: #0d1a14; --red: #f2847b; --red-bg: #3a1f1d;
+      --green: #5cc095; --green-bg: #183027; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 12px 16px 96px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 12px; }
+  header h1 { font-size: 20px; margin: 0; text-align: center; flex: 1; }
+  .nav { width: 40px; height: 40px; border-radius: 20px; border: 1px solid var(--line);
+    background: var(--card); font-size: 20px; cursor: pointer; }
+  .nav:disabled { opacity: .3; }
+
+  .placar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+  .kpi { background: var(--card); border-radius: 12px; padding: 10px; box-shadow: var(--shadow); }
+  .kpi small { display: block; color: var(--muted); font-size: 12px; }
+  .kpi b { font-size: 15px; white-space: nowrap; }
+  .neg { color: var(--red); }
+
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding: 6px 0; scrollbar-width: none; }
+  .chip { border: 1px solid var(--line); background: var(--card); border-radius: 16px; padding: 5px 12px;
+    white-space: nowrap; cursor: pointer; font-size: 14px; }
+  .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 4px 6px; }
+  .lista { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+  .item { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-top: 1px solid var(--line); cursor: pointer; }
+  .item:first-child { border-top: 0; }
+  .item .txt { flex: 1; min-width: 0; }
+  .item .nome { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .sub { color: var(--muted); font-size: 13px; }
+  .item .val { text-align: right; white-space: nowrap; }
+  .item.pago .nome { color: var(--muted); }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 8px; margin-left: 4px; }
+  .tag.venc { background: var(--red-bg); color: var(--red); }
+  .tag.ok { background: var(--green-bg); color: var(--green); }
+  .vazio { padding: 14px 12px; color: var(--muted); }
+
+  .barra { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
+    display: flex; justify-content: space-around; align-items: center; padding: 6px 0 calc(6px + env(safe-area-inset-bottom)); }
+  .barra button { background: none; border: 0; color: var(--muted); font-size: 12px; padding: 6px 12px; cursor: pointer; }
+  .barra button.on { color: var(--accent); font-weight: 600; }
+  .barra .mais { width: 52px; height: 52px; border-radius: 26px; background: var(--accent); color: var(--accent-ink);
+    font-size: 28px; line-height: 1; margin-top: -24px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+
+  .fundo { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; align-items: flex-end; justify-content: center; z-index: 10; }
+  .fundo.on { display: flex; }
+  .folha { background: var(--card); width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto;
+    border-radius: 16px 16px 0 0; padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); }
+  .folha h3 { margin: 0 0 4px; font-size: 18px; }
+  .folha .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .campo { margin: 10px 0; }
+  .campo label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .campo input, .campo select, .campo textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--bg); }
+  .linha2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .dados { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; margin: 8px 0; }
+  .dados span:nth-child(odd) { color: var(--muted); }
+  .btn { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card);
+    cursor: pointer; margin-top: 8px; font-weight: 600; }
+  .btn.pri { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .btn.perigo { color: var(--red); }
+  .btn:disabled { opacity: .5; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { flex: 1; padding: 8px; border: 0; background: var(--bg); cursor: pointer; }
+  .seg button.on { background: var(--accent); color: var(--accent-ink); }
+  .check { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+  .check input { width: 20px; height: 20px; }
+  .links a { display: block; color: var(--accent); margin: 2px 0; }
+  .aviso { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  .login { text-align: center; padding: 40px 0; }
+  .login #botaoGoogle { display: inline-block; margin-top: 8px; min-height: 44px; }
+  .rodape { text-align: center; color: var(--muted); font-size: 13px; margin: 24px 0 8px; }
+  .rodape button { background: none; border: 0; color: var(--accent); text-decoration: underline; cursor: pointer; padding: 0 4px; }
+  .toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: var(--ink); color: var(--bg);
+    padding: 8px 14px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
+  .toast.on { opacity: 1; }
+  .carregando { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: var(--accent); transform: scaleX(0);
+    transform-origin: left; transition: transform .3s; z-index: 30; }
+  .carregando.on { transform: scaleX(.8); transition: transform 4s; }
+  .erro { background: var(--red-bg); color: var(--red); padding: 12px; border-radius: 10px; margin: 16px 0; }
+</style>
+</head>
+<body>
+<div class="carregando" id="carregando"></div>
+<div class="wrap">
+  <header>
+    <button class="nav" id="ant" aria-label="Mês anterior">‹</button>
+    <h1 id="titulo">Finanças</h1>
+    <button class="nav" id="prox" aria-label="Próximo mês">›</button>
+  </header>
+  <div id="conteudo"><p class="vazio">Carregando…</p></div>
+</div>
+
+<nav class="barra">
+  <button class="on">Mês</button>
+  <button class="mais" id="btnNovo" aria-label="Novo lançamento">+</button>
+  <button disabled>Resumo<br><small>em breve</small></button>
+</nav>
+
+<div class="fundo" id="fundo"><div class="folha" id="folha"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+window.onerror =(msg, src, linha) => { document.getElementById('conteudo').insertAdjacentHTML('beforeend', `<div class="erro">Erro na tela: ${msg} (linha ${linha})</div>`); };
+window.addEventListener('unhandledrejection', e => { document.getElementById('conteudo').insertAdjacentHTML('beforeend', `<div class="erro">Erro: ${(e.reason && e.reason.message) || e.reason}</div>`); });
+</script>
+<script>
+// Servidor = Apps Script publicado como API; login = "Entrar com Google" (ID token), conferido no servidor.
+const API = 'https://script.google.com/macros/s/AKfycbwcof9mClbEJ8aW3iwMsk7rkNIlT2NVMCO2H2WpSdItzOM5l-_-7vPhAMx12olSxji1zA/exec';
+const CLIENT_ID = 'PENDENTE.apps.googleusercontent.com';
+const ACEITA = 'image/' + '*,application/pdf';
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const st = { pessoa: 'Todos', situacao: 'Todos' };
+const $ = id => document.getElementById(id);
+
+// ---------- login ----------
+
+// A sessão (30 dias) fica guardada neste aparelho; o "Entrar com Google" só aparece no primeiro acesso ou depois de sair.
+const guardar = (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+const ler = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+let SESSAO = ler('fin_sessao');
+
+function mostrarLogin(msg) {
+  SESSAO = null; guardar('fin_sessao', null);
+  $('titulo').textContent = 'Finanças';
+  $('conteudo').innerHTML = `<div class="login"><p>Entre com a sua conta Google.</p>${msg ? `<div class="erro">${esc(msg)}</div>` : ''}<div id="botaoGoogle"></div></div>`;
+  desenharBotao();
+}
+function desenharBotao() {
+  if ($('botaoGoogle') && window.google && google.accounts) {
+    google.accounts.id.renderButton($('botaoGoogle'), { theme: 'filled_blue', size: 'large', text: 'signin_with', shape: 'pill', locale: 'pt-BR' });
+  }
+}
+
+// Chamado pelo script do Google (gsi/client) quando termina de carregar.
+function gisPronto() {
+  google.accounts.id.initialize({ client_id: CLIENT_ID, callback: r => entrar(r.credential) });
+  desenharBotao();
+}
+
+async function entrar(idToken) {
+  try {
+    const d = await post({ acao: 'entrar', idToken });
+    SESSAO = d.sessao; guardar('fin_sessao', SESSAO);
+    carregarTudo();
+  } catch (e) { mostrarLogin(e.message); }
+}
+
+function sair() {
+  mostrarLogin();
+  if (window.google && google.accounts) google.accounts.id.disableAutoSelect();
+}
+
+// ---------- servidor ----------
+
+async function post(corpo) {
+  $('carregando').classList.add('on');
+  const espera = setTimeout(() => toast('O servidor está demorando…'), 15000);
+  try {
+    const r = await fetch(API, { method: 'POST', body: JSON.stringify(corpo) });
+    const j = await r.json();
+    if (!j.ok) { const e = new Error(j.erro); e.login = j.login; throw e; }
+    return j.dados;
+  } finally { clearTimeout(espera); $('carregando').classList.remove('on'); }
+}
+
+async function call(acao, ...args) {
+  if (!SESSAO) { mostrarLogin(); throw new Error('Faça login'); }
+  try { return await post({ sessao: SESSAO, acao, args }); }
+  catch (e) { if (e.login) mostrarLogin(e.message); throw e; }
+}
+const brl = n => (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const usd = n => 'US$ ' + (Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const dataBR = s => (s && /^\d{4}-\d{2}-\d{2}/.test(s)) ? s.slice(8, 10) + '/' + s.slice(5, 7) : '';
+const nomeMes = m => MESES[Number(m.slice(5, 7)) - 1] + ' ' + m.slice(0, 4);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const numero = s => { s = String(s).trim().replace(/[R$\s]/g, ''); if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.'); return Number(s); };
+const quemCurto = e => !e ? '' : e === st.usuario ? 'você' : e.split('@')[0];
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 2500); }
+function erro(e) { toast((e && e.message) || String(e)); }
+
+// Busca o banco inteiro uma vez; trocar de mês é local. Recarrega ao voltar para o app (pega o que a outra pessoa lançou).
+let carregadoEm = 0;
+async function carregarTudo() {
+  try {
+    const d = await call('carregar');
+    Object.assign(st, d);
+    if (!st.mes || st.meses.indexOf(st.mes) < 0) {
+      const atual = st.hoje.slice(0, 7);
+      st.mes = st.meses.indexOf(atual) >= 0 ? atual : st.meses[st.meses.length - 1];
+    }
+    carregadoEm = Date.now();
+    render();
+  } catch (e) {
+    if (!$('botaoGoogle')) $('conteudo').innerHTML = `<div class="erro">Não consegui abrir o banco de dados.<br><small>${esc(e.message || e)}</small></div>`;
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && SESSAO && carregadoEm && Date.now() - carregadoEm > 60000 && !$('fundo').classList.contains('on')) carregarTudo();
+});
+
+function abrirMes(mes) { st.mes = mes; render(); window.scrollTo(0, 0); }
+
+function filtrados() {
+  return st.itens.filter(i => i.mes === st.mes && (st.pessoa === 'Todos' || i.pessoa === st.pessoa));
+}
+
+function render() {
+  $('titulo').textContent = nomeMes(st.mes);
+  const k = st.meses.indexOf(st.mes);
+  $('ant').disabled = k <= 0; $('prox').disabled = k >= st.meses.length - 1;
+
+  const itens = filtrados();
+  const soma = f => itens.filter(f).reduce((s, i) => s + (Number(i.valor_brl) || 0), 0);
+  const rec = soma(i => i.tipo === 'Receita'), desp = soma(i => i.tipo === 'Despesa');
+  const pago = soma(i => i.tipo === 'Despesa' && i.pago);
+  const abertos = itens.filter(i => i.tipo === 'Despesa' && !i.pago && Number(i.valor_brl) > 0).length;
+
+  const pessoas = ['Todos'].concat(st.cad['Pessoas'] || []);
+  const situacoes = ['Todos', 'A pagar', 'Pagos'];
+  let h = `
+    <div class="placar">
+      <div class="kpi"><small>Receitas</small><b>${brl(rec)}</b></div>
+      <div class="kpi"><small>Despesas</small><b>${brl(desp)}</b></div>
+      <div class="kpi"><small>Saldo</small><b class="${rec - desp < 0 ? 'neg' : ''}">${brl(rec - desp)}</b></div>
+      <div class="kpi"><small>Já pago</small><b>${brl(pago)}</b></div>
+      <div class="kpi"><small>A pagar</small><b>${brl(desp - pago)}</b></div>
+      <div class="kpi"><small>Em aberto</small><b>${abertos} ${abertos === 1 ? 'conta' : 'contas'}</b></div>
+    </div>
+    <div class="chips">${pessoas.map(p => `<button class="chip ${p === st.pessoa ? 'on' : ''}" data-pessoa="${esc(p)}">${esc(p)}</button>`).join('')}</div>
+    <div class="chips">${situacoes.map(p => `<button class="chip ${p === st.situacao ? 'on' : ''}" data-sit="${esc(p)}">${esc(p)}</button>`).join('')}</div>`;
+
+  const ok = i => st.situacao === 'Todos' || (st.situacao === 'Pagos' ? i.pago : !i.pago);
+  const porVenc = (a, b) => (a.vencimento || '9999').localeCompare(b.vencimento || '9999');
+  const secoes = [
+    ['A pagar', itens.filter(i => i.tipo === 'Despesa' && !i.pago && ok(i)).sort(porVenc)],
+    ['Pagas', itens.filter(i => i.tipo === 'Despesa' && i.pago && ok(i)).sort(porVenc)],
+    ['Receitas', itens.filter(i => i.tipo === 'Receita' && ok(i)).sort(porVenc)],
+  ];
+  for (const [nome, lista] of secoes) {
+    if (!lista.length) continue;
+    h += `<h2>${nome}</h2><div class="lista">${lista.map(linha).join('')}</div>`;
+  }
+  if (!secoes.some(s => s[1].length)) h += `<p class="vazio">Nada aqui com esses filtros.</p>`;
+  h += `<p class="rodape">Conectado como ${esc(st.usuario)}<button onclick="sair()">Sair</button></p>`;
+  $('conteudo').innerHTML = h;
+
+  document.querySelectorAll('[data-pessoa]').forEach(b => b.onclick = () => { st.pessoa = b.dataset.pessoa; render(); });
+  document.querySelectorAll('[data-sit]').forEach(b => b.onclick = () => { st.situacao = b.dataset.sit; render(); });
+  document.querySelectorAll('.item').forEach(el => el.onclick = () => detalhe(el.dataset.id));
+}
+
+function linha(i) {
+  const vencida = !i.pago && i.vencimento && i.vencimento < st.hoje && i.tipo === 'Despesa' && Number(i.valor_brl) > 0;
+  const sub = [i.vencimento ? (i.tipo === 'Receita' ? 'dia ' : 'vence ') + dataBR(i.vencimento) : '', i.pessoa, i.parcela].filter(Boolean).join(' · ');
+  const tag = vencida ? '<span class="tag venc">vencida</span>' : (i.pago ? `<span class="tag ok">${i.tipo === 'Receita' ? 'recebido' : 'pago'}</span>` : '');
+  const valor = i.moeda === 'USD' ? `${usd(i.valor)}<div class="sub">${brl(i.valor_brl)}</div>` : brl(i.valor_brl);
+  return `<div class="item ${i.pago ? 'pago' : ''}" data-id="${esc(i.id)}">
+    <div class="txt"><div class="nome">${esc(i.item)}${i.comprovante ? ' 📎' : ''}</div><div class="sub">${esc(sub)}${tag}</div></div>
+    <div class="val">${valor}</div></div>`;
+}
+
+// ---------- folha (detalhe e novo) ----------
+
+function abrirFolha(html) { $('folha').innerHTML = html; $('fundo').classList.add('on'); }
+function fecharFolha() { $('fundo').classList.remove('on'); }
+$('fundo').onclick = e => { if (e.target === $('fundo')) fecharFolha(); };
+
+function atualizarItem(novo) {
+  const k = st.itens.findIndex(i => i.id === novo.id);
+  if (k >= 0) st.itens[k] = novo; else st.itens.push(novo);
+  render();
+}
+
+function detalhe(id) {
+  const i = st.itens.find(x => x.id === id);
+  const receita = i.tipo === 'Receita';
+  const links = String(i.comprovante || '').split('\n').filter(Boolean);
+  const temOverride = i.valor_mes !== '' && i.valor_mes !== null;
+  abrirFolha(`
+    <h3>${esc(i.item)}</h3>
+    <div class="sub">${esc(i.tipo)} · ${esc(i.pessoa)} · ${esc(i.categoria)}</div>
+    <div class="dados">
+      ${i.vencimento ? `<span>${receita ? 'Data' : 'Vencimento'}</span><span>${dataBR(i.vencimento)}/${i.vencimento.slice(0, 4)}</span>` : ''}
+      ${i.parcela ? `<span>Parcela</span><span>${esc(i.parcela)}</span>` : ''}
+      ${i.forma_pgto ? `<span>Forma</span><span>${esc(i.forma_pgto)}</span>` : ''}
+      <span>Previsto</span><span>${i.moeda === 'USD' ? usd(i.valor_previsto) : brl(i.valor_previsto)}</span>
+      <span>Valor do mês</span><span><b>${i.moeda === 'USD' ? usd(i.valor) + ' = ' + brl(i.valor_brl) : brl(i.valor_brl)}</b></span>
+      ${i.pago ? `<span>${receita ? 'Recebido' : 'Pago'}</span><span>${dataBR(i.pago_em)}${i.pago_por ? ' por ' + esc(quemCurto(i.pago_por)) : ''}</span>` : ''}
+    </div>
+    <button class="btn pri" id="bPago">${i.pago ? 'Desfazer ' + (receita ? 'recebido' : 'pago') : 'Marcar como ' + (receita ? 'recebido' : 'pago')}</button>
+
+    <div class="campo"><label>Valor deste mês ${i.moeda === 'USD' ? '(US$)' : '(R$)'}${temOverride ? '' : ', vazio = previsto'}</label>
+      <div class="linha2"><input id="vMes" inputmode="decimal" value="${temOverride ? String(i.valor_mes).replace('.', ',') : ''}" placeholder="${String(i.valor_previsto).replace('.', ',')}">
+      <button class="btn" id="bValor" style="margin:0">Salvar valor</button></div></div>
+
+    <div class="campo"><label>Comprovante</label>
+      <div class="links">${links.map((l, n) => `<a href="${esc(l)}" target="_blank">Abrir comprovante${links.length > 1 ? ' ' + (n + 1) : ''}</a>`).join('')}</div>
+      <input type="file" id="arq" accept="${ACEITA}"></div>
+
+    <div class="campo"><label>Observação</label><textarea id="obs" rows="3">${esc(i.obs)}</textarea>
+      <button class="btn" id="bObs">Salvar observação</button></div>
+
+    ${i.origem === 'extra' ? '<button class="btn perigo" id="bExcluir">Excluir lançamento</button>' : ''}
+    <div class="aviso">${i.criado_por ? 'Criado por ' + esc(quemCurto(i.criado_por)) + (i.criado_em ? ' em ' + esc(i.criado_em) : '') : ''}${i.alterado_por ? '. Alterado por ' + esc(quemCurto(i.alterado_por)) + ' em ' + esc(i.alterado_em) : ''}</div>
+    <button class="btn" onclick="fecharFolha()">Fechar</button>`);
+
+  const trava = async (botao, acao, msg) => {
+    botao.disabled = true;
+    try { const novo = await acao(); if (novo) { atualizarItem(novo); detalhe(novo.id); } toast(msg); }
+    catch (e) { erro(e); botao.disabled = false; }
+  };
+  // Pago muda na tela na hora; o servidor grava por trás e, se falhar, a tela volta ao que era.
+  $('bPago').onclick = () => {
+    const antes = Object.assign({}, i);
+    const pago = !i.pago;
+    atualizarItem(Object.assign({}, i, { pago, pago_em: pago ? st.hoje : '', pago_por: pago ? st.usuario : '' }));
+    detalhe(id);
+    toast(pago ? (receita ? 'Marcado como recebido' : 'Marcado como pago') : 'Desfeito');
+    call('marcarPago', id, pago).then(atualizarItem).catch(err => {
+      atualizarItem(antes);
+      if ($('fundo').classList.contains('on') && $('bPago')) detalhe(id);
+      toast('Não gravou: ' + ((err && err.message) || err));
+    });
+  };
+  $('bValor').onclick = e => {
+    const t = $('vMes').value.trim();
+    if (t !== '' && !isFinite(numero(t))) return toast('Valor inválido');
+    trava(e.target, () => call('definirValorMes', id, t === '' ? '' : numero(t)), 'Valor salvo');
+  };
+  $('bObs').onclick = e => trava(e.target, () => call('definirObs', id, $('obs').value), 'Observação salva');
+  $('arq').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    e.target.disabled = true; toast('Enviando comprovante…');
+    try { const { b64, mime, nome } = await prepararArquivo(f); const novo = await call('anexarComprovante', id, nome, mime, b64); atualizarItem(novo); detalhe(id); toast('Comprovante anexado'); }
+    catch (err) { erro(err); e.target.disabled = false; }
+  };
+  if ($('bExcluir')) $('bExcluir').onclick = async e => {
+    if (e.target.dataset.conf !== '1') { e.target.dataset.conf = '1'; e.target.textContent = 'Toque de novo para excluir'; return; }
+    e.target.disabled = true;
+    try { await call('excluirLancamento', id); st.itens = st.itens.filter(x => x.id !== id); render(); fecharFolha(); toast('Excluído'); }
+    catch (err) { erro(err); e.target.disabled = false; }
+  };
+}
+
+// Foto do celular é reduzida para no máximo 1600 px antes de subir; PDF vai como está.
+function prepararArquivo(f) {
+  return new Promise((ok, falha) => {
+    if (/^image\/(jpeg|png|webp|heic|heif)/.test(f.type)) {
+      const img = new Image();
+      img.onload = () => {
+        const fator = Math.min(1, 1600 / Math.max(img.width, img.height));
+        const c = document.createElement('canvas'); c.width = Math.round(img.width * fator); c.height = Math.round(img.height * fator);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        ok({ b64: c.toDataURL('image/jpeg', 0.8).split(',')[1], mime: 'image/jpeg', nome: 'comprovante.jpg' });
+      };
+      img.onerror = () => lerCru(f).then(ok, falha);
+      img.src = URL.createObjectURL(f);
+    } else lerCru(f).then(ok, falha);
+  });
+}
+function lerCru(f) {
+  return new Promise((ok, falha) => {
+    if (f.size > 20 * 1024 * 1024) return falha(new Error('Arquivo maior que 20 MB'));
+    const r = new FileReader();
+    r.onload = () => ok({ b64: r.result.split(',')[1], mime: f.type || 'application/octet-stream', nome: f.name });
+    r.onerror = () => falha(r.error); r.readAsDataURL(f);
+  });
+}
+
+function novo() {
+  const hojeNoMes = st.hoje.slice(0, 7) === st.mes ? st.hoje : st.mes + '-01';
+  const opts = (lista, sel) => lista.map(v => `<option ${v === sel ? 'selected' : ''}>${esc(v)}</option>`).join('');
+  const formas = (st.cad['Forma Pgto'] || []).filter(f => f !== 'Crédito');
+  abrirFolha(`
+    <h3>Novo lançamento</h3>
+    <div class="seg" id="tipo"><button class="on" data-v="Despesa">Despesa</button><button data-v="Receita">Receita</button></div>
+    <div class="campo"><label>Item</label><input id="nItem" placeholder="Ex.: Farmácia, conserto, presente"></div>
+    <div class="linha2">
+      <div class="campo"><label>Valor</label><input id="nValor" inputmode="decimal" placeholder="0,00"></div>
+      <div class="campo"><label>Moeda</label><select id="nMoeda">${opts(st.cad['Moeda'] || ['BRL'], 'BRL')}</select></div>
+    </div>
+    <div class="linha2">
+      <div class="campo"><label>Data</label><input id="nData" type="date" value="${hojeNoMes}"></div>
+      <div class="campo"><label>Mês da planilha</label><select id="nMes">${st.meses.map(m => `<option value="${m}" ${m === st.mes ? 'selected' : ''}>${nomeMes(m)}</option>`).join('')}</select></div>
+    </div>
+    <div class="linha2">
+      <div class="campo"><label>Pessoa</label><select id="nPessoa">${opts(st.cad['Pessoas'] || [], 'Gerais')}</select></div>
+      <div class="campo"><label>Forma</label><select id="nForma">${opts(formas, 'PIX')}</select></div>
+    </div>
+    <div class="campo"><label>Categoria</label><select id="nCat">${opts(st.cad['Categorias'] || [], 'Outros')}</select></div>
+    <div class="aviso">Compra no cartão de crédito não entra aqui: ela vem pela fatura do cartão.</div>
+    <label class="check"><input type="checkbox" id="nPago" checked> Já está pago</label>
+    <div class="campo"><label>Comprovante (opcional)</label><input type="file" id="nArq" accept="${ACEITA}"></div>
+    <div class="campo"><label>Observação (opcional)</label><textarea id="nObs" rows="2"></textarea></div>
+    <button class="btn pri" id="bSalvar">Salvar</button>
+    <button class="btn" onclick="fecharFolha()">Cancelar</button>`);
+  let tipo = 'Despesa';
+  document.querySelectorAll('#tipo button').forEach(b => b.onclick = () => {
+    tipo = b.dataset.v; document.querySelectorAll('#tipo button').forEach(x => x.classList.toggle('on', x === b));
+    $('nPago').parentNode.lastChild.textContent = tipo === 'Receita' ? ' Já foi recebido' : ' Já está pago';
+  });
+  $('bSalvar').onclick = async e => {
+    const valor = numero($('nValor').value);
+    if (!$('nItem').value.trim()) return toast('Preencha o item');
+    if (!isFinite(valor) || $('nValor').value.trim() === '') return toast('Valor inválido');
+    e.target.disabled = true;
+    try {
+      let o = await call('criarLancamento', {
+        tipo, item: $('nItem').value.trim(), valor, moeda: $('nMoeda').value, data: $('nData').value, mes: $('nMes').value,
+        pessoa: $('nPessoa').value, forma_pgto: $('nForma').value, categoria: $('nCat').value, pago: $('nPago').checked, obs: $('nObs').value.trim(),
+      });
+      const f = $('nArq').files[0];
+      if (f) { toast('Enviando comprovante…'); const a = await prepararArquivo(f); o = await call('anexarComprovante', o.id, a.nome, a.mime, a.b64); }
+      fecharFolha();
+      st.mes = o.mes; atualizarItem(o);
+      toast('Lançado');
+    } catch (err) { erro(err); e.target.disabled = false; }
+  };
+}
+
+$('btnNovo').onclick = novo;
+$('ant').onclick = () => abrirMes(st.meses[st.meses.indexOf(st.mes) - 1]);
+$('prox').onclick = () => abrirMes(st.meses[st.meses.indexOf(st.mes) + 1]);
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+if (SESSAO) carregarTudo(); else mostrarLogin();
+</script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="gisPronto()"></script>
+</body>
+</html>
