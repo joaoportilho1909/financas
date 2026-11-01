@@ -849,12 +849,15 @@ function mais() {
       <button class="btn" id="bAvisos" style="margin:0">${st.usuario === DONO ? 'Atualizar avisos agora' : 'Atualizar meus avisos'}</button></div>
     <div class="campo"><label>Contas e receitas que se repetem: criar, mudar valor ou dia, encerrar.</label>
       <button class="btn" id="bRecTela" style="margin:0">Recorrentes</button></div>
+    <div class="campo"><label>Transferências, aplicações e resgates entre contas, e o saldo de cada conta.</label>
+      <button class="btn" id="bMovTela" style="margin:0">Movimentações e saldos</button></div>
     <div class="campo"><label>Câmbio real (US$ para R$), referência de cada mês e histórico.</label>
       <button class="btn" id="bCambioTela" style="margin:0">Câmbio</button></div>
     <div class="campo"><label>Extrato da conta do C6 em PDF, exportado pelo app do banco. O app compara com os lançamentos e marca como pago o que bater, com a data do extrato.</label>
       <label class="btn">Importar extrato do C6<input type="file" id="arqExtrato" accept=".pdf,application/pdf" hidden></label></div>
     <button class="btn" onclick="fecharFolha()">Fechar</button>`);
   $('bCambioTela').onclick = telaCambio;
+  $('bMovTela').onclick = telaMov;
   $('bAvisos').onclick = e => atualizarAvisos(e.target);
   $('bRecTela').onclick = telaRecorrentes;
   $('arqExtrato').onchange = e => {
@@ -1571,6 +1574,139 @@ async function atualizarAvisos(el) {
     toast(resumoAvisos(n)); render(); if ($('fundo').classList.contains('on') && $('bAvisos')) mais();
   } catch (err) { erro(err); }
   delete el.dataset.ocupado;
+}
+
+// ---------- movimentações e saldos ----------
+
+const TIPOS_MOV = ['Transferência', 'Aplicação', 'Resgate', 'Outro'];
+// Contas conhecidas: as que já aparecem em saldos e movimentações (sugestão no campo, dá para digitar outra).
+const contasConhecidas = () => [...new Set([...(st.saldos || []).map(x => x.conta), ...(st.movs || []).flatMap(x => [x.de, x.para])]
+  .map(x => String(x || '').trim()).filter(x => x && x !== 'Pix'))].sort((a, b) => a.localeCompare(b));
+// Último saldo de cada conta (data mais recente; no mesmo dia, o lançado por último).
+function saldosAtuais() {
+  const u = {};
+  (st.saldos || []).forEach(x => { const k = String(x.conta).trim(), a = u[k]; if (!a || String(x.data) > String(a.data) || (x.data === a.data && String(x.criado_em) >= String(a.criado_em))) u[k] = x; });
+  return Object.values(u).sort((a, b) => Number(b.valor) - Number(a.valor));
+}
+
+function telaMov() {
+  const saldos = saldosAtuais(), total = saldos.reduce((t, x) => t + Number(x.valor), 0);
+  const movs = (st.movs || []).slice().sort((a, b) => String(b.data).localeCompare(String(a.data)) || String(b.id).localeCompare(String(a.id)));
+  const porMes = {};
+  movs.forEach(x => (porMes[x.mes] = porMes[x.mes] || []).push(x));
+  const linhaMov = x => `<div class="item" data-mov="${esc(x.id)}"><span class="ico" style="background:#e2e9fb">⇄</span><div class="txt"><div class="nome">${esc(x.movimento)}</div>
+    <div class="sub">${esc(dataBR(String(x.data)))}${x.de || x.para ? ' · ' + esc(x.de || '?') + ' → ' + esc(x.para || '?') : ''}</div></div><div class="val">${m(x.valor_brl)}</div></div>`;
+  abrirFolha(`
+    <h3>Movimentações e saldos</h3>
+    <div class="bloco">Saldos das contas</div>
+    ${saldos.length ? `<div class="dados">${saldos.map(x => `<span>${esc(x.conta)}</span><span><b>${m(x.valor)}</b> <small style="color:var(--muted)">em ${esc(dataBR(String(x.data)))}</small></span>`).join('')}
+      <span>Total</span><span><b>${m(total)}</b></span></div>` : '<div class="aviso">Nenhum saldo registrado.</div>'}
+    <div class="aviso">Cada conta mostra o último saldo informado, com a data. O total soma esses saldos, mesmo de datas diferentes.</div>
+    <button class="btn" id="bNovoSaldo">Atualizar saldo de uma conta</button>
+    <div class="bloco">Movimentações</div>
+    <button class="btn pri" id="bNovaMov">Nova movimentação</button>
+    ${movs.length ? Object.keys(porMes).sort().reverse().map(ms => `<div class="dia">${esc(nomeMes(ms))}</div><div class="lista">${porMes[ms].map(linhaMov).join('')}</div>`).join('')
+      : '<div class="aviso">Nenhuma movimentação.</div>'}
+    <div class="aviso">Movimentação não entra nas receitas nem nas despesas do mês.</div>
+    <button class="btn" id="bVoltar">Voltar</button>`);
+  $('bVoltar').onclick = mais;
+  $('bNovaMov').onclick = novaMov;
+  $('bNovoSaldo').onclick = novoSaldo;
+  document.querySelectorAll('[data-mov]').forEach(el => (el.onclick = () => detalheMov(el.dataset.mov)));
+}
+
+const listaContas = () => `<datalist id="contas">${contasConhecidas().map(c => `<option value="${esc(c)}">`).join('')}</datalist>`;
+
+function novaMov() {
+  abrirFolha(`
+    <h3>Nova movimentação</h3>
+    <div class="seg" id="mTipo">${TIPOS_MOV.map((t, k) => `<button class="${k ? '' : 'on'}" data-v="${t}">${t}</button>`).join('')}</div>
+    <div class="campo"><label>Descrição</label><input id="mDesc" value="Transferência"></div>
+    <div class="linha2">
+      <div class="campo"><label>De (conta)</label><input id="mDe" list="contas" autocomplete="off"></div>
+      <div class="campo"><label>Para (conta)</label><input id="mPara" list="contas" autocomplete="off"></div>
+    </div>
+    <div class="linha2">
+      <div class="campo"><label>Valor (R$)</label><input id="mValor" inputmode="decimal" placeholder="0,00"></div>
+      <div class="campo"><label>Data</label><input id="mData" type="date" value="${st.hoje}"></div>
+    </div>
+    <div class="campo"><label>Mês do app</label><select id="mMes">${opcoesMes(st.hoje.slice(0, 7))}</select></div>
+    <div class="campo"><label>Observação (opcional)</label><textarea id="mObs" rows="2"></textarea></div>
+    ${listaContas()}
+    <button class="btn pri" id="bMovSalvar">Salvar</button>
+    <button class="btn" id="bVoltar">Voltar</button>`);
+  let tipo = TIPOS_MOV[0];
+  document.querySelectorAll('#mTipo button').forEach(b => (b.onclick = () => {
+    if ($('mDesc').value === tipo || !$('mDesc').value.trim()) $('mDesc').value = b.dataset.v === 'Outro' ? '' : b.dataset.v;
+    tipo = b.dataset.v; document.querySelectorAll('#mTipo button').forEach(x => x.classList.toggle('on', x === b));
+  }));
+  $('mData').onchange = () => { const ms = $('mData').value.slice(0, 7); if (st.meses.includes(ms)) $('mMes').value = ms; };
+  $('bVoltar').onclick = telaMov;
+  $('bMovSalvar').onclick = async e => {
+    const valor = numero($('mValor').value);
+    if (!$('mDesc').value.trim()) return toast('Preencha a descrição');
+    if (!(valor > 0)) return toast('Valor inválido');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test($('mData').value)) return toast('Data inválida');
+    e.target.disabled = true; e.target.textContent = 'Gravando…';
+    try {
+      const o = await call('criarMovimentacao', { movimento: $('mDesc').value.trim(), de: $('mDe').value.trim(), para: $('mPara').value.trim(),
+        valor, data: $('mData').value, mes: $('mMes').value, obs: $('mObs').value.trim() });
+      (st.movs = st.movs || []).push(o);
+      telaMov(); toast('Movimentação lançada');
+    } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Salvar'; }
+  };
+}
+
+function detalheMov(id) {
+  const x = st.movs.find(v => v.id === id);
+  const cambio = /^câmbio/i.test(x.movimento);
+  abrirFolha(`
+    <h3>${esc(x.movimento)}</h3>
+    <div class="dados">
+      <span>Data</span><span>${esc(dataBR(String(x.data)))}/${esc(String(x.data).slice(0, 4))}</span>
+      <span>Mês do app</span><span>${esc(nomeMes(x.mes))}</span>
+      <span>De</span><span>${esc(x.de || '')}</span>
+      <span>Para</span><span>${esc(x.para || '')}</span>
+      <span>Valor</span><span><b>${m(x.valor_brl)}</b></span>
+    </div>
+    ${x.obs ? `<div class="aviso">${esc(x.obs)}</div>` : ''}
+    <div class="aviso">${x.criado_por ? 'Lançado por ' + esc(quemCurto(x.criado_por)) + (x.criado_em ? ' em ' + esc(x.criado_em) : '') : ''}</div>
+    ${cambio ? '<div class="aviso">Excluir um câmbio não desfaz o câmbio aplicado ao lançamento em dólar.</div>' : ''}
+    <button class="btn perigo" id="bMovExcluir">Excluir movimentação</button>
+    <button class="btn" id="bVoltar">Voltar</button>`);
+  $('bVoltar').onclick = telaMov;
+  $('bMovExcluir').onclick = async e => {
+    if (e.target.dataset.conf !== '1') { e.target.dataset.conf = '1'; e.target.textContent = 'Toque de novo para excluir'; return; }
+    e.target.disabled = true;
+    try { await call('excluirMovimentacao', id); st.movs = st.movs.filter(v => v.id !== id); telaMov(); toast('Excluída'); }
+    catch (err) { erro(err); e.target.disabled = false; }
+  };
+}
+
+function novoSaldo() {
+  abrirFolha(`
+    <h3>Saldo de uma conta</h3>
+    <div class="campo"><label>Conta</label><input id="sConta" list="contas" autocomplete="off" placeholder="Ex.: C6, conta"></div>
+    <div class="linha2">
+      <div class="campo"><label>Saldo (R$)</label><input id="sValor" inputmode="decimal" placeholder="0,00"></div>
+      <div class="campo"><label>Data</label><input id="sData" type="date" value="${st.hoje}"></div>
+    </div>
+    <div class="campo"><label>Observação (opcional)</label><textarea id="sObs" rows="2"></textarea></div>
+    ${`<datalist id="contas">${[...new Set((st.saldos || []).map(x => String(x.conta).trim()).concat(contasConhecidas()))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>`}
+    <button class="btn pri" id="bSaldoSalvar">Salvar</button>
+    <button class="btn" id="bVoltar">Voltar</button>`);
+  $('bVoltar').onclick = telaMov;
+  $('bSaldoSalvar').onclick = async e => {
+    const valor = numero($('sValor').value);
+    if (!$('sConta').value.trim()) return toast('Preencha a conta');
+    if (!isFinite(valor) || $('sValor').value.trim() === '') return toast('Valor inválido');
+    e.target.disabled = true; e.target.textContent = 'Gravando…';
+    try {
+      const o = await call('registrarSaldo', { conta: $('sConta').value.trim(), valor, data: $('sData').value, obs: $('sObs').value.trim() });
+      (st.saldos = st.saldos || []).push(o);
+      telaMov(); toast('Saldo registrado');
+    } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Salvar'; }
+  };
 }
 
 function novo() {
