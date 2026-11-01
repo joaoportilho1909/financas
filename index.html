@@ -1590,11 +1590,14 @@ const contasConhecidas = () => {
 function saldosAtuais() {
   const u = {};
   (st.saldos || []).forEach(x => { const k = String(x.conta).trim(), a = u[k]; if (!a || String(x.data) > String(a.data) || (x.data === a.data && String(x.criado_em) >= String(a.criado_em))) u[k] = x; });
-  return Object.values(u).sort((a, b) => Number(b.valor) - Number(a.valor));
+  const ref = Number(st.cambios[mesAtual()]) || 0;
+  return Object.values(u).sort((a, b) => (b.moeda === 'USD' ? b.valor * ref : b.valor) - (a.moeda === 'USD' ? a.valor * ref : a.valor));
 }
 
 function telaMov() {
-  const saldos = saldosAtuais(), total = saldos.reduce((t, x) => t + Number(x.valor), 0);
+  const ref = Number(st.cambios[mesAtual()]) || 0;
+  const emReais = x => (x.moeda === 'USD' ? Number(x.valor) * ref : Number(x.valor));
+  const saldos = saldosAtuais(), total = saldos.reduce((t, x) => t + emReais(x), 0), temDolar = saldos.some(x => x.moeda === 'USD');
   const movs = (st.movs || []).slice().sort((a, b) => String(b.data).localeCompare(String(a.data)) || String(b.id).localeCompare(String(a.id)));
   const porMes = {};
   movs.forEach(x => (porMes[x.mes] = porMes[x.mes] || []).push(x));
@@ -1603,9 +1606,9 @@ function telaMov() {
   abrirFolha(`
     <h3>Movimentações e saldos</h3>
     <div class="bloco">Saldos das contas</div>
-    ${saldos.length ? `<div class="dados">${saldos.map(x => `<span>${esc(x.conta)}</span><span><b>${m(x.valor)}</b> <small style="color:var(--muted)">em ${esc(dataBR(String(x.data)))}</small></span>`).join('')}
+    ${saldos.length ? `<div class="dados">${saldos.map(x => `<span>${esc(x.conta)}</span><span><b>${x.moeda === 'USD' ? (st.oculto ? 'US$ ••••' : usd(x.valor)) : m(x.valor)}</b> <small style="color:var(--muted)">${x.moeda === 'USD' ? '≈ ' + m(emReais(x)) + ', ' : ''}em ${esc(dataBR(String(x.data)))}</small></span>`).join('')}
       <span>Total</span><span><b>${m(total)}</b></span></div>` : '<div class="aviso">Nenhum saldo registrado.</div>'}
-    <div class="aviso">Cada conta mostra o último saldo informado, com a data. O total soma esses saldos, mesmo de datas diferentes.</div>
+    <div class="aviso">Cada conta mostra o último saldo informado, com a data. O total soma esses saldos, mesmo de datas diferentes${temDolar ? `, e converte o saldo em dólar pela referência de ${esc(nomeMes(mesAtual()))} (${fmtCambio(ref)})` : ''}.</div>
     <button class="btn" id="bNovoSaldo">Atualizar saldo de uma conta</button>
     <div class="bloco">Movimentações</div>
     <button class="btn pri" id="bNovaMov">Nova movimentação</button>
@@ -1692,21 +1695,23 @@ function novoSaldo() {
     <h3>Saldo de uma conta</h3>
     <div class="campo"><label>Conta</label><input id="sConta" list="contas" autocomplete="off" placeholder="Ex.: C6, conta"></div>
     <div class="linha2">
-      <div class="campo"><label>Saldo (R$)</label><input id="sValor" inputmode="decimal" placeholder="0,00"></div>
-      <div class="campo"><label>Data</label><input id="sData" type="date" value="${st.hoje}"></div>
+      <div class="campo"><label>Saldo</label><input id="sValor" inputmode="decimal" placeholder="0,00"></div>
+      <div class="campo"><label>Moeda</label><select id="sMoeda"><option value="BRL">R$</option><option value="USD">US$</option></select></div>
     </div>
+    <div class="campo"><label>Data</label><input id="sData" type="date" value="${st.hoje}"></div>
     <div class="campo"><label>Observação (opcional)</label><textarea id="sObs" rows="2"></textarea></div>
     ${listaContas()}
     <button class="btn pri" id="bSaldoSalvar">Salvar</button>
     <button class="btn" id="bVoltar">Voltar</button>`);
   $('bVoltar').onclick = telaMov;
+  $('sConta').oninput = () => { if (/US\$|USD|global/i.test($('sConta').value)) $('sMoeda').value = 'USD'; };
   $('bSaldoSalvar').onclick = async e => {
     const valor = numero($('sValor').value);
     if (!$('sConta').value.trim()) return toast('Preencha a conta');
     if (!isFinite(valor) || $('sValor').value.trim() === '') return toast('Valor inválido');
     e.target.disabled = true; e.target.textContent = 'Gravando…';
     try {
-      const o = await call('registrarSaldo', { conta: $('sConta').value.trim(), valor, data: $('sData').value, obs: $('sObs').value.trim() });
+      const o = await call('registrarSaldo', { conta: $('sConta').value.trim(), valor, moeda: $('sMoeda').value, data: $('sData').value, obs: $('sObs').value.trim() });
       (st.saldos = st.saldos || []).push(o);
       telaMov(); toast('Saldo registrado');
     } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Salvar'; }
