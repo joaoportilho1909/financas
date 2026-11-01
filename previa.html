@@ -149,6 +149,27 @@
   details.compras label input { width: 20px; height: 20px; flex: none; margin: 2px 0 0; accent-color: var(--acc); }
   .bloco { margin: 12px 0 4px; font-weight: 600; font-size: 14px; }
   details.grupo summary { cursor: pointer; margin: 12px 0 4px; font-weight: 600; font-size: 14px; color: var(--muted); }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+  .tiles small { display: block; color: var(--muted); font-size: 12px; }
+  .tiles b { font-size: 15px; }
+  .graf { position: relative; }
+  .graf svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .graf .eixo { font-size: 9px; fill: var(--muted); }
+  .graf .eixo.atual { fill: var(--ink); font-weight: 700; }
+  .graf .alvo { fill: transparent; cursor: pointer; }
+  .graf .alvo.on { fill: rgba(36, 80, 184, .07); }
+  .dica { position: absolute; top: 0; background: var(--ink); color: #fff; font-size: 12px; line-height: 1.5; border-radius: 10px;
+    padding: 6px 9px; pointer-events: none; white-space: nowrap; display: none; z-index: 2; }
+  .dica b { color: #fff; }
+  .leg { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+  .leg span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; background: var(--c); }
+  table.anual { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  table.anual th { color: var(--muted); font-weight: 500; text-align: right; padding: 4px 2px; }
+  table.anual th:first-child, table.anual td:first-child { text-align: left; }
+  table.anual td { text-align: right; padding: 7px 2px; border-top: 1px solid var(--line); }
+  table.anual tr[data-mes] { cursor: pointer; }
+  table.anual tr.atual td { font-weight: 700; }
+  table.anual tfoot td { font-weight: 700; border-top: 2px solid var(--line); }
 </style>
 </head>
 <body>
@@ -164,7 +185,7 @@
   <button class="on" data-aba="principal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span>Principal</span></button>
   <button data-aba="transacoes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg><span>Transações</span></button>
   <button class="mais" id="btnNovo" aria-label="Novo lançamento">+</button>
-  <button disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Resumo</span></button>
+  <button data-aba="resumo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Resumo</span></button>
   <button id="btnMais"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span>Mais</span></button>
 </nav>
 
@@ -298,18 +319,25 @@ const OLHO = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke
 
 function render() {
   const [ano, mm] = st.mes.split('-');
-  $('titulo').innerHTML = `${MESES[Number(mm) - 1]} <small>${ano}</small>`;
-  const k = st.meses.indexOf(st.mes);
-  $('ant').disabled = k <= 0; $('prox').disabled = k >= st.meses.length - 1;
+  if (st.aba === 'resumo') {
+    const anos = anosDoApp(), a = anoResumo(), k = anos.indexOf(a);
+    $('titulo').innerHTML = `Resumo <small>${a}</small>`;
+    $('ant').disabled = k <= 0; $('prox').disabled = k >= anos.length - 1;
+  } else {
+    $('titulo').innerHTML = `${MESES[Number(mm) - 1]} <small>${ano}</small>`;
+    const k = st.meses.indexOf(st.mes);
+    $('ant').disabled = k <= 0; $('prox').disabled = k >= st.meses.length - 1;
+  }
   document.querySelectorAll('[data-aba]').forEach(b => b.classList.toggle('on', b.dataset.aba === st.aba));
   const chipsPessoa = `<div class="chips">${['Todos'].concat(st.cad['Pessoas'] || []).map(p => `<button class="chip ${p === st.pessoa ? 'on' : ''}" data-pessoa="${esc(p)}">${esc(p)}</button>`).join('')}</div>`;
-  let h = chipsPessoa + (st.aba === 'principal' ? telaPrincipal() : telaTransacoes());
+  let h = chipsPessoa + (st.aba === 'principal' ? telaPrincipal() : st.aba === 'resumo' ? telaResumo() : telaTransacoes());
   h += `<p class="rodape">Conectado como ${esc(st.usuario)}<button onclick="sair()">Sair</button></p>`;
   $('conteudo').innerHTML = h;
   document.querySelectorAll('[data-pessoa]').forEach(b => b.onclick = () => { st.pessoa = b.dataset.pessoa; render(); });
   document.querySelectorAll('[data-sit]').forEach(b => b.onclick = () => { st.situacao = b.dataset.sit; render(); });
   document.querySelectorAll('.item').forEach(el => el.onclick = () => detalhe(el.dataset.id));
   document.querySelectorAll('[data-ir]').forEach(el => el.onclick = () => { st.aba = 'transacoes'; st.situacao = el.dataset.ir; render(); window.scrollTo(0, 0); });
+  if (st.aba === 'resumo') ligarResumo();
   if ($('olho')) $('olho').onclick = () => { st.oculto = !st.oculto; guardar('fin_oculto', st.oculto ? '1' : '0'); render(); };
 }
 
@@ -1119,6 +1147,117 @@ function novaRec() {
   };
 }
 
+// ---------- resumo do ano ----------
+
+const anosDoApp = () => [...new Set(st.meses.map(m => m.slice(0, 4)))];
+const anoResumo = () => (st.anoResumo && anosDoApp().includes(st.anoResumo) ? st.anoResumo : st.mes.slice(0, 4));
+function trocarAno(d) { const a = anosDoApp(), k = a.indexOf(anoResumo()) + d; if (a[k]) { st.anoResumo = a[k]; render(); } }
+const milhar = n => (st.oculto ? '••••' : Math.round(n).toLocaleString('pt-BR'));
+const curto = n => (Math.abs(n) >= 1000 ? (n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' mil' : Math.round(n).toLocaleString('pt-BR'));
+const COR_REC = '#2f8a5b', COR_DESP = '#c2402f';
+
+// Receitas e despesas de cada mês do ano (respeita o filtro de pessoa); acumulado começa em janeiro.
+function serieAno(ano) {
+  let acum = 0;
+  return st.meses.filter(m => m.startsWith(ano)).map(mes => {
+    const t = totais(st.itens.filter(i => i.mes === mes && (st.pessoa === 'Todos' || i.pessoa === st.pessoa)));
+    acum += t.rec - t.desp;
+    return { mes, rec: t.rec, desp: t.desp, saldo: t.rec - t.desp, acum };
+  });
+}
+
+// Topo da barra arredondado e base reta no eixo.
+function barra(x, y0, w, v, esc) {
+  const h = Math.abs(v) * esc; if (h < 0.5) return '';
+  const r = Math.min(3, w / 2, h), y = v >= 0 ? y0 - h : y0 + h, s = v >= 0 ? 1 : -1;
+  return `M${x},${y0}V${y + s * r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + s * r}V${y0}Z`;
+}
+
+function graficoMeses(serie) {
+  const W = 340, H = 150, base = 128, topo = 8, esq = 30, larg = (W - esq) / 12;
+  const max = Math.max(1, ...serie.flatMap(s => [s.rec, s.desp]));
+  const e = (base - topo) / max, atual = st.hoje.slice(0, 7);
+  const grade = [0, max / 2, max].map(v => `<line x1="${esq}" x2="${W}" y1="${base - v * e}" y2="${base - v * e}" stroke="var(--line)" stroke-width="1"/>`
+    + (v ? `<text class="eixo" x="${esq - 4}" y="${base - v * e + 3}" text-anchor="end">${st.oculto ? '' : curto(v)}</text>` : '')).join('');
+  const barras = serie.map((s, k) => {
+    const x = esq + k * larg + larg / 2, w = Math.min(9, larg / 2 - 3);
+    return `<path d="${barra(x - w - 1, base, w, s.rec, e)}" fill="${COR_REC}"/><path d="${barra(x + 1, base, w, s.desp, e)}" fill="${COR_DESP}"/>`
+      + `<text class="eixo ${s.mes === atual ? 'atual' : ''}" x="${x}" y="${H - 6}" text-anchor="middle">${MESES[Number(s.mes.slice(5)) - 1][0]}</text>`;
+  }).join('');
+  const alvos = serie.map((s, k) => `<rect class="alvo" data-k="${k}" x="${esq + k * larg}" y="0" width="${larg}" height="${H}" rx="6"/>`).join('');
+  return `<div class="graf" id="gMeses"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Receitas e despesas por mês">${alvos}${grade}${barras}</svg><div class="dica"></div></div>`;
+}
+
+function graficoSaldo(serie) {
+  const W = 340, H = 120, larg = W / 12, atual = st.hoje.slice(0, 7);
+  const max = Math.max(1, ...serie.map(s => Math.abs(s.saldo)));
+  const temNeg = serie.some(s => s.saldo < 0), temPos = serie.some(s => s.saldo > 0);
+  const zero = temNeg && temPos ? 52 : temNeg ? 8 : 96, e = (temNeg && temPos ? 44 : 86) / max;
+  const barras = serie.map((s, k) => {
+    const x = k * larg + larg / 2, w = Math.min(14, larg - 8);
+    return `<path d="${barra(x - w / 2, zero, w, s.saldo, e)}" fill="${s.saldo >= 0 ? COR_REC : COR_DESP}"/>`
+      + `<text class="eixo ${s.mes === atual ? 'atual' : ''}" x="${x}" y="${H - 4}" text-anchor="middle">${MESES[Number(s.mes.slice(5)) - 1][0]}</text>`;
+  }).join('');
+  const alvos = serie.map((s, k) => `<rect class="alvo" data-k="${k}" x="${k * larg}" y="0" width="${larg}" height="${H}" rx="6"/>`).join('');
+  return `<div class="graf" id="gSaldo"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Saldo de cada mês">${alvos}<line x1="0" x2="${W}" y1="${zero}" y2="${zero}" stroke="var(--muted)" stroke-width="1"/>${barras}</svg><div class="dica"></div></div>`;
+}
+
+function telaResumo() {
+  const ano = anoResumo(), serie = serieAno(ano);
+  st.serieResumo = serie;
+  const rec = serie.reduce((t, s) => t + s.rec, 0), desp = serie.reduce((t, s) => t + s.desp, 0);
+  const itensAno = st.itens.filter(i => i.mes.startsWith(ano) && (st.pessoa === 'Todos' || i.pessoa === st.pessoa));
+  const porCat = {};
+  itensAno.filter(i => i.tipo === 'Despesa').forEach(i => { const c = i.categoria || 'Outros'; porCat[c] = (porCat[c] || 0) + (Number(i.valor_brl) || 0); });
+  const cats = Object.entries(porCat).filter(c => c[1] > 0.005).sort((a, b) => b[1] - a[1]);
+  const ids = new Set(itensAno.map(i => i.id));
+  const compras = (st.compras || []).filter(c => ids.has(c.lanc_id));
+  const atual = st.hoje.slice(0, 7);
+  let h = `
+    <div class="card"><div class="tiles">
+      <div><small>Receitas</small><b class="verde">${m(rec)}</b></div>
+      <div><small>Despesas</small><b class="vermelho">${m(desp)}</b></div>
+      <div><small>Saldo do ano</small><b class="${rec - desp < 0 ? 'vermelho' : ''}">${m(rec - desp)}</b></div>
+    </div></div>
+    <div class="card"><h2>Receitas e despesas</h2>
+      <div class="leg"><span style="--c:${COR_REC}">Receitas</span><span style="--c:${COR_DESP}">Despesas</span></div>
+      ${graficoMeses(serie)}</div>
+    <div class="card"><h2>Saldo de cada mês</h2>${graficoSaldo(serie)}</div>
+    <div class="card"><h2>Mês a mês</h2>
+      <table class="anual"><thead><tr><th>Mês</th><th>Receitas</th><th>Despesas</th><th>Saldo</th><th>Acum.</th></tr></thead><tbody>
+      ${serie.map(s => `<tr data-mes="${s.mes}" class="${s.mes === atual ? 'atual' : ''}"><td>${MESES[Number(s.mes.slice(5)) - 1].slice(0, 3)}</td><td>${milhar(s.rec)}</td><td>${milhar(s.desp)}</td>
+        <td class="${s.saldo < 0 ? 'vermelho' : ''}">${milhar(s.saldo)}</td><td class="${s.acum < 0 ? 'vermelho' : ''}">${milhar(s.acum)}</td></tr>`).join('')}
+      </tbody><tfoot><tr><td>Ano</td><td>${milhar(rec)}</td><td>${milhar(desp)}</td><td class="${rec - desp < 0 ? 'vermelho' : ''}">${milhar(rec - desp)}</td><td></td></tr></tfoot></table>
+      <div class="aviso">Valores em reais, sem centavos. Toque num mês para abrir. O acumulado soma os saldos a partir de janeiro.</div></div>`;
+  if (cats.length) h += `<div class="card"><h2>Despesas do ano por categoria</h2>${htmlGrade(cats)}</div>`;
+  if (compras.length) {
+    const n = new Set(compras.map(c => c.lanc_id)).size;
+    h += `<div class="card"><h2>Gastos no cartão</h2><div class="aviso" style="margin:-6px 0 4px">${n} ${n === 1 ? 'fatura importada' : 'faturas importadas'} no ano, compras por categoria</div>${htmlGrade(gradeCategorias(compras))}</div>`;
+  }
+  return h;
+}
+
+// Dica ao passar o dedo/mouse: mês, receitas, despesas, saldo. Linha da tabela abre o mês.
+function ligarResumo() {
+  ['gMeses', 'gSaldo'].forEach(id => {
+    const g = $(id); if (!g) return;
+    const dica = g.querySelector('.dica');
+    const mostrar = el => {
+      const s = st.serieResumo[Number(el.dataset.k)];
+      g.querySelectorAll('.alvo').forEach(a => a.classList.toggle('on', a === el));
+      dica.innerHTML = `<b>${esc(nomeMes(s.mes))}</b><br>Receitas ${m(s.rec)}<br>Despesas ${m(s.desp)}<br>Saldo ${m(s.saldo)}`;
+      dica.style.display = 'block';
+      const caixa = g.getBoundingClientRect(), r = el.getBoundingClientRect();
+      const x = r.left - caixa.left + r.width / 2, w = dica.offsetWidth;
+      dica.style.left = Math.max(0, Math.min(caixa.width - w, x - w / 2)) + 'px';
+      dica.style.top = '-8px'; dica.style.transform = 'translateY(-100%)';
+    };
+    g.querySelectorAll('.alvo').forEach(el => { el.onpointerenter = () => mostrar(el); el.onclick = () => mostrar(el); });
+    g.onpointerleave = () => { dica.style.display = 'none'; g.querySelectorAll('.alvo').forEach(a => a.classList.remove('on')); };
+  });
+  document.querySelectorAll('tr[data-mes]').forEach(tr => (tr.onclick = () => { st.aba = 'principal'; abrirMes(tr.dataset.mes); }));
+}
+
 function novo() {
   const hojeNoMes = st.hoje.slice(0, 7) === st.mes ? st.hoje : st.mes + '-01';
   const opts = (lista, sel) => lista.map(v => `<option ${v === sel ? 'selected' : ''}>${esc(v)}</option>`).join('');
@@ -1173,8 +1312,8 @@ function novo() {
 $('btnNovo').onclick = novo;
 $('btnMais').onclick = mais;
 document.querySelectorAll('[data-aba]').forEach(b => b.onclick = () => { st.aba = b.dataset.aba; render(); window.scrollTo(0, 0); });
-$('ant').onclick = () => abrirMes(st.meses[st.meses.indexOf(st.mes) - 1]);
-$('prox').onclick = () => abrirMes(st.meses[st.meses.indexOf(st.mes) + 1]);
+$('ant').onclick = () => (st.aba === 'resumo' ? trocarAno(-1) : abrirMes(st.meses[st.meses.indexOf(st.mes) - 1]));
+$('prox').onclick = () => (st.aba === 'resumo' ? trocarAno(1) : abrirMes(st.meses[st.meses.indexOf(st.mes) + 1]));
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 if (SESSAO) carregarTudo(); else mostrarLogin();
 </script>
