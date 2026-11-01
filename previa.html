@@ -148,6 +148,7 @@
   details.compras label { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); cursor: pointer; }
   details.compras label input { width: 20px; height: 20px; flex: none; margin: 2px 0 0; accent-color: var(--acc); }
   .bloco { margin: 12px 0 4px; font-weight: 600; font-size: 14px; }
+  details.grupo summary { cursor: pointer; margin: 12px 0 4px; font-weight: 600; font-size: 14px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -803,12 +804,15 @@ function casarExtrato(linhas) {
 function mais() {
   abrirFolha(`
     <h3>Mais</h3>
+    <div class="campo"><label>Contas e receitas que se repetem: criar, mudar valor ou dia, encerrar.</label>
+      <button class="btn" id="bRecTela" style="margin:0">Recorrentes</button></div>
     <div class="campo"><label>Câmbio real (US$ para R$), referência de cada mês e histórico.</label>
       <button class="btn" id="bCambioTela" style="margin:0">Câmbio</button></div>
     <div class="campo"><label>Extrato da conta do C6 em PDF, exportado pelo app do banco. O app compara com os lançamentos e marca como pago o que bater, com a data do extrato.</label>
       <label class="btn">Importar extrato do C6<input type="file" id="arqExtrato" accept=".pdf,application/pdf" hidden></label></div>
     <button class="btn" onclick="fecharFolha()">Fechar</button>`);
   $('bCambioTela').onclick = telaCambio;
+  $('bRecTela').onclick = telaRecorrentes;
   $('arqExtrato').onchange = e => {
     const f = e.target.files[0]; if (!f) return;
     lerPDFcomSenha(f, '', itens => previaExtrato(lerExtratoC6(itens), f.name), mais);
@@ -954,6 +958,165 @@ function perguntarRef(vet, mes) {
     <button class="btn" id="bNao">Não, manter</button>`);
   $('bNao').onclick = () => { telaCambio(); toast('Câmbio registrado'); };
   $('bSim').onclick = e => aplicarRef(e.target, seguintes, vet);
+}
+
+// ---------- recorrentes ----------
+
+function somaMes(mes, n) {
+  const [a, m] = mes.split('-').map(Number), t = a * 12 + m - 1 + n;
+  return `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, '0')}`;
+}
+const fimRec = r => (r.parcelas === '' || r.parcelas === null ? '' : somaMes(String(r.inicio), Number(r.parcelas) - 1));
+const recAtiva = r => r.ativo === true && (r.parcelas === '' || Number(r.parcelas) !== 0) && (!fimRec(r) || fimRec(r) >= st.hoje.slice(0, 7));
+// Ordem que o João usa: receitas, aluguéis, cartões, o resto.
+const grupoRec = r => (r.tipo === 'Receita' ? 0 : /aluguel/i.test(r.item) ? 1 : r.categoria === 'Cartões de Crédito' ? 2 : 3);
+const valorRec = r => (r.moeda === 'USD' ? usd(r.valor_padrao) : brl(r.valor_padrao));
+const prazoRec = r => (Number(r.parcelas) === 0 && r.parcelas !== '' ? 'encerrada' : !fimRec(r) ? 'contínua' : `${r.parcelas}x, ${mesCurto(String(r.inicio))} a ${mesCurto(fimRec(r))}`);
+const trocarRec = r => { const k = st.recs.findIndex(x => x.id === r.id); if (k >= 0) st.recs[k] = r; else st.recs.push(r); };
+const opcoesMes = sel => st.meses.map(m => `<option value="${m}" ${m === sel ? 'selected' : ''}>${esc(nomeMes(m))}</option>`).join('');
+const mesAtual = () => st.meses.find(m => m >= st.hoje.slice(0, 7)) || st.mes;
+
+function telaRecorrentes() {
+  const recs = (st.recs || []).slice().sort((a, b) => grupoRec(a) - grupoRec(b) || a.id.localeCompare(b.id));
+  const ativas = recs.filter(recAtiva), outras = recs.filter(r => !recAtiva(r));
+  const linhaR = r => `<div class="item" data-rec="${esc(r.id)}">${icone(r)}<div class="txt"><div class="nome">${esc(r.item)}</div>
+    <div class="sub">${esc([r.pessoa, 'dia ' + r.dia_venc, prazoRec(r)].join(' · '))}</div></div><div class="val ${r.tipo === 'Receita' ? 'verde' : ''}">${valorRec(r)}</div></div>`;
+  let h = `<h3>Recorrentes</h3><div class="sub">${ativas.length} ativas</div><button class="btn pri" id="bNovaRec">Nova recorrente</button>`;
+  ['Receitas', 'Aluguéis', 'Cartões', 'Demais despesas'].forEach((n, g) => {
+    const l = ativas.filter(r => grupoRec(r) === g);
+    if (l.length) h += `<div class="bloco">${n} (${l.length})</div><div class="lista">${l.map(linhaR).join('')}</div>`;
+  });
+  if (outras.length) h += `<details class="grupo"><summary>Encerradas (${outras.length})</summary><div class="lista">${outras.map(linhaR).join('')}</div></details>`;
+  abrirFolha(h + '<button class="btn" id="bVoltar">Voltar</button>');
+  $('bVoltar').onclick = mais;
+  $('bNovaRec').onclick = novaRec;
+  document.querySelectorAll('[data-rec]').forEach(el => (el.onclick = () => detalheRec(el.dataset.rec)));
+}
+
+function detalheRec(id) {
+  const r = st.recs.find(x => x.id === id);
+  const linhas = st.itens.filter(i => i.origem === id);
+  const abertas = linhas.filter(i => !i.pago);
+  const temOv = i => i.valor_mes !== '' && i.valor_mes !== null;
+  abrirFolha(`
+    <h3>${esc(r.item)}</h3>
+    <div class="sub">${esc(r.tipo)} · ${esc(r.pessoa)} · ${esc(r.categoria)}</div>
+    <div class="dados">
+      <span>Valor padrão</span><span><b>${valorRec(r)}</b></span>
+      <span>Vencimento</span><span>dia ${esc(r.dia_venc)}</span>
+      <span>Forma</span><span>${esc(r.forma_pgto)}</span>
+      <span>Prazo</span><span>${esc(prazoRec(r))}${r.ativo === true ? '' : ' (desativada)'}</span>
+      <span>Meses no app</span><span>${linhas.length}, ${abertas.length} em aberto</span>
+    </div>
+    ${r.obs ? `<div class="aviso">${esc(r.obs)}</div>` : ''}
+    <div class="bloco">Mudar valor ou dia</div>
+    <div class="campo"><label>A partir de</label><select id="rDesde">${opcoesMes(mesAtual())}</select></div>
+    <div class="linha2">
+      <div class="campo"><label>Valor novo ${r.moeda === 'USD' ? '(US$)' : '(R$)'}</label><input id="rValor" inputmode="decimal" placeholder="${String(r.valor_padrao).replace('.', ',')}"></div>
+      <div class="campo"><label>Dia novo</label><input id="rDia" inputmode="numeric" placeholder="${esc(r.dia_venc)}"></div>
+    </div>
+    <div class="aviso" id="rEfeito"></div>
+    <button class="btn pri" id="bRecMudar">Aplicar mudança</button>
+    <div class="bloco">Encerrar</div>
+    <div class="campo"><label>Sai dos meses a partir de</label><select id="rFim">${opcoesMes(mesAtual())}</select></div>
+    <div class="aviso" id="rEfeitoFim"></div>
+    <button class="btn perigo" id="bRecFim">Encerrar</button>
+    <button class="btn" id="bVoltar">Voltar</button>`);
+  const efeito = () => {
+    const d = $('rDesde').value, l = abertas.filter(i => i.mes >= d), ov = l.filter(temOv).length;
+    $('rEfeito').textContent = `Muda ${l.length} ${l.length === 1 ? 'mês em aberto' : 'meses em aberto'} de ${nomeMes(d)} em diante.`
+      + (ov ? ` Em ${ov} com valor do mês próprio, só o valor previsto muda.` : '') + ' Meses pagos ou recebidos não mudam.';
+  };
+  const efeitoFim = () => {
+    const d = $('rFim').value, l = linhas.filter(i => i.mes >= d), fica = l.filter(i => i.pago || i.comprovante).length;
+    $('rEfeitoFim').textContent = `Apaga ${l.length - fica} ${l.length - fica === 1 ? 'mês' : 'meses'} em aberto de ${nomeMes(d)} em diante`
+      + (fica ? `; ${fica} pago(s) ou com comprovante ficam.` : '.');
+  };
+  $('rDesde').onchange = efeito; $('rFim').onchange = efeitoFim; efeito(); efeitoFim();
+  $('bVoltar').onclick = telaRecorrentes;
+  $('bRecMudar').onclick = async e => {
+    const v = $('rValor').value.trim(), dd = $('rDia').value.trim();
+    if (!v && !dd) return toast('Preencha o valor ou o dia');
+    if (v && !isFinite(numero(v))) return toast('Valor inválido');
+    if (dd && !(Number(dd) >= 1 && Number(dd) <= 31)) return toast('Dia inválido');
+    e.target.disabled = true; e.target.textContent = 'Gravando…';
+    try {
+      const res = await call('alterarRecorrente', id, { aPartirDe: $('rDesde').value, valor: v ? numero(v) : '', dia_venc: dd ? Number(dd) : '' });
+      trocarRec(res.rec);
+      res.itens.forEach(n => { const k = st.itens.findIndex(i => i.id === n.id); if (k >= 0) st.itens[k] = n; });
+      render(); detalheRec(id);
+      toast(`${res.itens.length} ${res.itens.length === 1 ? 'mês atualizado' : 'meses atualizados'}`);
+    } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Aplicar mudança'; }
+  };
+  $('bRecFim').onclick = async e => {
+    if (e.target.dataset.conf !== '1') { e.target.dataset.conf = '1'; e.target.textContent = 'Toque de novo para encerrar'; return; }
+    e.target.disabled = true; e.target.textContent = 'Encerrando…';
+    try {
+      const res = await call('encerrarRecorrente', id, $('rFim').value);
+      trocarRec(res.rec);
+      st.itens = st.itens.filter(i => !res.removidos.includes(i.id));
+      render(); detalheRec(id);
+      toast(`Encerrada: ${res.removidos.length} ${res.removidos.length === 1 ? 'mês removido' : 'meses removidos'}${res.mantidos.length ? `, ${res.mantidos.length} mantido(s)` : ''}`);
+    } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Encerrar'; }
+  };
+}
+
+function novaRec() {
+  const opts = (lista, sel) => lista.map(v => `<option ${v === sel ? 'selected' : ''}>${esc(v)}</option>`).join('');
+  abrirFolha(`
+    <h3>Nova recorrente</h3>
+    <div class="seg" id="rTipo"><button class="on" data-v="Despesa">Despesa</button><button data-v="Receita">Receita</button></div>
+    <div class="campo"><label>Item</label><input id="nrItem" placeholder="Ex.: Academia, escola, seguro"></div>
+    <div class="linha2">
+      <div class="campo"><label>Valor</label><input id="nrValor" inputmode="decimal" placeholder="0,00"></div>
+      <div class="campo"><label>Moeda</label><select id="nrMoeda">${opts(st.cad['Moeda'] || ['BRL'], 'BRL')}</select></div>
+    </div>
+    <div class="linha2">
+      <div class="campo"><label>Dia do vencimento</label><input id="nrDia" inputmode="numeric" placeholder="10"></div>
+      <div class="campo"><label>Começa em</label><select id="nrIni">${opcoesMes(mesAtual())}</select></div>
+    </div>
+    <div class="campo"><label>Número de parcelas (vazio = contínua até o fim do app)</label><input id="nrParc" inputmode="numeric"></div>
+    <div class="linha2">
+      <div class="campo"><label>Pessoa</label><select id="nrPessoa">${opts(st.cad['Pessoas'] || [], 'Gerais')}</select></div>
+      <div class="campo"><label>Forma</label><select id="nrForma">${opts(st.cad['Forma Pgto'] || [], 'PIX')}</select></div>
+    </div>
+    <div class="campo"><label>Categoria</label><select id="nrCat">${opts(st.cad['Categorias'] || [], 'Outros')}</select></div>
+    <div class="campo"><label>Observação (opcional)</label><textarea id="nrObs" rows="2"></textarea></div>
+    <div class="aviso" id="nrEfeito"></div>
+    <button class="btn pri" id="bNrSalvar">Criar</button>
+    <button class="btn" id="bVoltar">Voltar</button>`);
+  let tipo = 'Despesa';
+  document.querySelectorAll('#rTipo button').forEach(b => (b.onclick = () => { tipo = b.dataset.v; document.querySelectorAll('#rTipo button').forEach(x => x.classList.toggle('on', x === b)); }));
+  const qtd = () => {
+    const ini = $('nrIni').value, p = $('nrParc').value.trim(), resto = st.meses.filter(m => m >= ini);
+    return p === '' ? resto : resto.slice(0, Number(p));
+  };
+  const efeito = () => {
+    const l = qtd(), p = $('nrParc').value.trim();
+    if (p !== '' && !(Number(p) >= 1)) return ($('nrEfeito').textContent = 'Parcelas inválidas');
+    $('nrEfeito').textContent = l.length ? `Cria ${l.length} ${l.length === 1 ? 'mês' : 'meses'}, de ${nomeMes(l[0])} a ${nomeMes(l[l.length - 1])}.`
+      + (p !== '' && Number(p) > l.length ? ` As outras ${Number(p) - l.length} parcelas passam do último mês do app.` : '') : 'Nenhum mês para criar.';
+  };
+  $('nrIni').onchange = efeito; $('nrParc').oninput = efeito; efeito();
+  $('bVoltar').onclick = telaRecorrentes;
+  $('bNrSalvar').onclick = async e => {
+    const valor = numero($('nrValor').value), dia = Number($('nrDia').value), p = $('nrParc').value.trim();
+    if (!$('nrItem').value.trim()) return toast('Preencha o item');
+    if (!isFinite(valor) || $('nrValor').value.trim() === '') return toast('Valor inválido');
+    if (!(dia >= 1 && dia <= 31)) return toast('Dia inválido');
+    if (p !== '' && !(Number(p) >= 1)) return toast('Parcelas inválidas');
+    e.target.disabled = true; e.target.textContent = 'Criando…';
+    try {
+      const res = await call('criarRecorrente', {
+        tipo, item: $('nrItem').value.trim(), valor, moeda: $('nrMoeda').value, dia_venc: dia, inicio: $('nrIni').value,
+        parcelas: p === '' ? '' : Number(p), pessoa: $('nrPessoa').value, forma_pgto: $('nrForma').value, categoria: $('nrCat').value, obs: $('nrObs').value.trim(),
+      });
+      trocarRec(res.rec);
+      st.itens = st.itens.concat(res.itens);
+      render(); detalheRec(res.rec.id);
+      toast(`Criada em ${res.itens.length} ${res.itens.length === 1 ? 'mês' : 'meses'}`);
+    } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Criar'; }
+  };
 }
 
 function novo() {
