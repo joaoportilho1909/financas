@@ -149,6 +149,35 @@
   details.compras label input { width: 20px; height: 20px; flex: none; margin: 2px 0 0; accent-color: var(--acc); }
   .bloco { margin: 12px 0 4px; font-weight: 600; font-size: 14px; }
   details.grupo summary { cursor: pointer; margin: 12px 0 4px; font-weight: 600; font-size: 14px; color: var(--muted); }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+  .tiles small { display: block; color: var(--muted); font-size: 12px; }
+  .tiles b { font-size: 15px; }
+  .graf { position: relative; }
+  .graf svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .graf .eixo { font-size: 9px; fill: var(--muted); }
+  .graf .eixo.atual { fill: var(--ink); font-weight: 700; }
+  .graf .alvo { fill: transparent; cursor: pointer; }
+  .graf .alvo.on { fill: rgba(36, 80, 184, .07); }
+  .dica { position: absolute; top: 0; transform: translateY(-100%); background: var(--ink); color: #fff; font-size: 12px; line-height: 1.5; border-radius: 10px;
+    padding: 6px 9px; pointer-events: none; white-space: nowrap; display: none; z-index: 2; }
+  .dica b { color: #fff; }
+  .leg { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+  .leg span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; background: var(--c); }
+  table.anual { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  table.anual th { color: var(--muted); font-weight: 500; text-align: right; padding: 4px 2px; }
+  table.anual th:first-child, table.anual td:first-child { text-align: left; }
+  table.anual td { text-align: right; padding: 7px 2px; border-top: 1px solid var(--line); }
+  table.anual tr[data-mes] { cursor: pointer; }
+  table.anual tr.atual td { font-weight: 700; }
+  table.anual tfoot td { font-weight: 700; border-top: 2px solid var(--line); }
+  .grade .g.sem-ico { grid-template-columns: 1fr auto; }
+  .grade .g.sem-ico .barra-cat { grid-column: 1 / 3; }
+  .grade .g.sem-ico small { color: var(--muted); font-size: 12px; }
+  .ponto { display: inline-block; width: 10px; height: 10px; border-radius: 5px; vertical-align: 0; }
+  .graf svg path, .graf svg line, .graf svg text, .graf svg circle, .graf svg rect:not(.alvo):not(.cel) { pointer-events: none; }
+  .graf .cel { cursor: pointer; }
+  .graf .cel.on { stroke: var(--ink); stroke-width: 1.5; }
+  .chips.secoes { flex-wrap: wrap; overflow: visible; }
 </style>
 </head>
 <body>
@@ -164,7 +193,7 @@
   <button class="on" data-aba="principal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span>Principal</span></button>
   <button data-aba="transacoes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg><span>Transações</span></button>
   <button class="mais" id="btnNovo" aria-label="Novo lançamento">+</button>
-  <button disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Resumo</span></button>
+  <button data-aba="resumo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Resumo</span></button>
   <button id="btnMais"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span>Mais</span></button>
 </nav>
 
@@ -298,18 +327,25 @@ const OLHO = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke
 
 function render() {
   const [ano, mm] = st.mes.split('-');
-  $('titulo').innerHTML = `${MESES[Number(mm) - 1]} <small>${ano}</small>`;
-  const k = st.meses.indexOf(st.mes);
-  $('ant').disabled = k <= 0; $('prox').disabled = k >= st.meses.length - 1;
+  if (st.aba === 'resumo') {
+    const anos = anosDoApp(), a = anoResumo(), k = anos.indexOf(a);
+    $('titulo').innerHTML = `Resumo <small>${a}</small>`;
+    $('ant').disabled = k <= 0; $('prox').disabled = k >= anos.length - 1;
+  } else {
+    $('titulo').innerHTML = `${MESES[Number(mm) - 1]} <small>${ano}</small>`;
+    const k = st.meses.indexOf(st.mes);
+    $('ant').disabled = k <= 0; $('prox').disabled = k >= st.meses.length - 1;
+  }
   document.querySelectorAll('[data-aba]').forEach(b => b.classList.toggle('on', b.dataset.aba === st.aba));
   const chipsPessoa = `<div class="chips">${['Todos'].concat(st.cad['Pessoas'] || []).map(p => `<button class="chip ${p === st.pessoa ? 'on' : ''}" data-pessoa="${esc(p)}">${esc(p)}</button>`).join('')}</div>`;
-  let h = chipsPessoa + (st.aba === 'principal' ? telaPrincipal() : telaTransacoes());
+  let h = chipsPessoa + (st.aba === 'principal' ? telaPrincipal() : st.aba === 'resumo' ? telaResumo() : telaTransacoes());
   h += `<p class="rodape">Conectado como ${esc(st.usuario)}<button onclick="sair()">Sair</button></p>`;
   $('conteudo').innerHTML = h;
   document.querySelectorAll('[data-pessoa]').forEach(b => b.onclick = () => { st.pessoa = b.dataset.pessoa; render(); });
   document.querySelectorAll('[data-sit]').forEach(b => b.onclick = () => { st.situacao = b.dataset.sit; render(); });
   document.querySelectorAll('.item').forEach(el => el.onclick = () => detalhe(el.dataset.id));
   document.querySelectorAll('[data-ir]').forEach(el => el.onclick = () => { st.aba = 'transacoes'; st.situacao = el.dataset.ir; render(); window.scrollTo(0, 0); });
+  if (st.aba === 'resumo') ligarResumo();
   if ($('olho')) $('olho').onclick = () => { st.oculto = !st.oculto; guardar('fin_oculto', st.oculto ? '1' : '0'); render(); };
 }
 
@@ -1119,6 +1155,336 @@ function novaRec() {
   };
 }
 
+// ---------- resumo do ano ----------
+
+const anosDoApp = () => [...new Set(st.meses.map(m => m.slice(0, 4)))];
+const anoResumo = () => (st.anoResumo && anosDoApp().includes(st.anoResumo) ? st.anoResumo : st.mes.slice(0, 4));
+function trocarAno(d) { const a = anosDoApp(), k = a.indexOf(anoResumo()) + d; if (a[k]) { st.anoResumo = a[k]; render(); } }
+const milhar = n => (st.oculto ? '••••' : Math.round(n).toLocaleString('pt-BR'));
+const curto = n => (Math.abs(n) >= 1000 ? (n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' mil' : Math.round(n).toLocaleString('pt-BR'));
+// Cores das séries, em ordem fixa (validadas: daltonismo e visão normal). Verde e vermelho ficam para receita e despesa.
+const COR_REC = '#2f8a5b', COR_DESP = '#c2402f', COR_FIXA = '#2450b8', COR_AVULSA = '#e0892f';
+const CORES_PESSOA = ['#2a9d8f', '#e0892f', '#8e6bbf', '#c9a227'];
+const SECOES = ['Geral', 'Pessoas', 'Categorias', 'Cartão', 'Parcelas', 'Dólar'];
+const doFiltro = i => st.pessoa === 'Todos' || i.pessoa === st.pessoa;
+const mesesDoAno = ano => st.meses.filter(m => m.startsWith(ano));
+const rotMeses = ms => ms.map(m => ({ txt: MESES[Number(m.slice(5)) - 1][0], atual: m === st.hoje.slice(0, 7) }));
+const legenda = l => `<div class="leg">${l.map(([n, c]) => `<span style="--c:${c}">${esc(n)}</span>`).join('')}</div>`;
+const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0) + '%';
+const somaBRL = l => l.reduce((t, i) => t + (Number(i.valor_brl) || 0), 0);
+const previstoBRL = i => (i.valor_previsto === '' || i.valor_previsto === null ? Number(i.valor_brl) || 0 : i.moeda === 'USD' ? Number(i.valor_previsto) * (Number(i.cambio) || Number(st.cambios[i.mes]) || 0) : Number(i.valor_previsto) || 0);
+const dicaMes = s => `<b>${esc(nomeMes(s.mes))}</b><br>Receitas ${m(s.rec)}<br>Despesas ${m(s.desp)}<br>Saldo ${m(s.saldo)}`;
+
+// Receitas e despesas de cada mês do ano (respeita o filtro de pessoa); acumulado começa em janeiro.
+function serieAno(ano) {
+  let acum = 0;
+  return mesesDoAno(ano).map(mes => {
+    const t = totais(st.itens.filter(i => i.mes === mes && doFiltro(i)));
+    acum += t.rec - t.desp;
+    return { mes, rec: t.rec, desp: t.desp, saldo: t.rec - t.desp, acum };
+  });
+}
+
+// Topo da barra arredondado e base reta no eixo.
+function barra(x, y0, w, v, esc) {
+  const h = Math.abs(v) * esc; if (h < 0.5) return '';
+  const r = Math.min(3, w / 2, h), y = v >= 0 ? y0 - h : y0 + h, s = v >= 0 ? 1 : -1;
+  return `M${x},${y0}V${y + s * r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + s * r}V${y0}Z`;
+}
+const grade = (esq, W, base, e, max) => [0, max / 2, max].map(v => `<line x1="${esq}" x2="${W}" y1="${base - v * e}" y2="${base - v * e}" stroke="var(--line)" stroke-width="1"/>`
+  + (v ? `<text class="eixo" x="${esq - 4}" y="${base - v * e + 3}" text-anchor="end">${st.oculto ? '' : curto(v)}</text>` : '')).join('');
+const alvos = (esq, larg, n, H) => Array.from({ length: n }, (_, k) => `<rect class="alvo" data-k="${k}" x="${esq + k * larg}" y="0" width="${larg}" height="${H}" rx="6"/>`).join('');
+const rotX = (r, x, y) => `<text class="eixo ${r.atual ? 'atual' : ''}" x="${x}" y="${y}" text-anchor="middle">${r.txt}</text>`;
+const grafico = (id, W, H, rotulo, corpo) => `<div class="graf" id="${id}"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(rotulo)}">${corpo}</svg><div class="dica"></div></div>`;
+
+// Barras lado a lado: receitas à esquerda, despesas à direita.
+function graficoMeses(serie) {
+  const W = 340, H = 150, base = 128, topo = 8, esq = 30, larg = (W - esq) / serie.length;
+  const max = Math.max(1, ...serie.flatMap(s => [s.rec, s.desp])), e = (base - topo) / max, rot = rotMeses(serie.map(s => s.mes));
+  st.dicas.gMeses = serie.map(dicaMes);
+  const barras = serie.map((s, k) => {
+    const x = esq + k * larg + larg / 2, w = Math.min(9, larg / 2 - 3);
+    return `<path d="${barra(x - w - 1, base, w, s.rec, e)}" fill="${COR_REC}"/><path d="${barra(x + 1, base, w, s.desp, e)}" fill="${COR_DESP}"/>` + rotX(rot[k], x, H - 6);
+  }).join('');
+  return grafico('gMeses', W, H, 'Receitas e despesas por mês', alvos(esq, larg, serie.length, H) + grade(esq, W, base, e, max) + barras);
+}
+
+// Barras empilhadas por mês (2px de superfície entre os pedaços, topo arredondado). series = [{ nome, cor, vals }].
+function grafPilha(id, rot, series, dicas, rotulo) {
+  const W = 340, H = 150, base = 128, topo = 8, esq = 30, n = rot.length, larg = (W - esq) / n;
+  const tot = rot.map((_, k) => series.reduce((t, s) => t + Math.max(0, s.vals[k]), 0));
+  const max = Math.max(1, ...tot), e = (base - topo) / max;
+  st.dicas[id] = dicas;
+  let g = grade(esq, W, base, e, max);
+  rot.forEach((r, k) => {
+    const w = Math.min(16, larg - 6), x = esq + k * larg + (larg - w) / 2;
+    const vis = series.map(s => [s.cor, Math.max(0, s.vals[k])]).filter(v => v[1] * e >= 0.5);
+    let y = base;
+    vis.forEach(([cor, v], q) => {
+      const hh = v * e, ult = q === vis.length - 1, alt = ult ? hh : Math.max(0.5, hh - 2);
+      g += ult ? `<path d="${barra(x, y, w, alt, 1)}" fill="${cor}"/>` : `<rect x="${x}" y="${y - alt}" width="${w}" height="${alt}" fill="${cor}"/>`;
+      y -= hh;
+    });
+    g += rotX(r, esq + k * larg + larg / 2, H - 6);
+  });
+  return grafico(id, W, H, rotulo, alvos(esq, larg, n, H) + g);
+}
+
+// Barras para cima e para baixo de uma linha zero (positivo numa cor, negativo na outra).
+function grafDiverg(id, rot, vals, corPos, corNeg, dicas, rotulo) {
+  const W = 340, H = 120, esq = 30, n = rot.length, larg = (W - esq) / n;
+  const max = Math.max(1, ...vals.map(Math.abs)), neg = vals.some(v => v < 0), pos = vals.some(v => v > 0);
+  const zero = neg && pos ? 52 : neg ? 8 : 96, e = (neg && pos ? 44 : 86) / max;
+  st.dicas[id] = dicas;
+  const barras = vals.map((v, k) => {
+    const x = esq + k * larg + larg / 2, w = Math.min(14, larg - 8);
+    return `<path d="${barra(x - w / 2, zero, w, v, e)}" fill="${v >= 0 ? corPos : corNeg}"/>` + rotX(rot[k], x, H - 4);
+  }).join('');
+  const marca = v => `<text class="eixo" x="${esq - 4}" y="${zero - v * e + 3}" text-anchor="end">${st.oculto ? '' : curto(v)}</text>`;
+  return grafico(id, W, H, rotulo, alvos(esq, larg, n, H) + `<line x1="${esq}" x2="${W}" y1="${zero}" y2="${zero}" stroke="var(--muted)" stroke-width="1"/>`
+    + (pos ? marca(max) : '') + (neg ? marca(-max) : '') + barras);
+}
+
+// Linha com marcadores; vals com null onde não há dado. cheio[k] = marcador cheio (câmbio real) ou vazado (referência).
+function grafLinha(id, rot, vals, cheio, dicas, rotulo, fmt) {
+  const W = 340, H = 130, esq = 40, base = 106, topo = 12, n = rot.length, larg = (W - esq) / n;
+  const v = vals.filter(x => x !== null), mn = Math.min(...v), mx = Math.max(...v), folga = (mx - mn) * 0.2 || 0.05;
+  const lo = mn - folga, hi = mx + folga, e = (base - topo) / (hi - lo), y = x => base - (x - lo) * e;
+  st.dicas[id] = dicas;
+  const pts = vals.map((x, k) => (x === null ? null : [esq + k * larg + larg / 2, y(x)]));
+  let traco = '', abre = true;
+  pts.forEach(p => { if (!p) { abre = true; return; } traco += `${abre ? 'M' : 'L'}${p[0]},${p[1]}`; abre = false; });
+  const eixos = [lo + folga, hi - folga].map(t => `<line x1="${esq}" x2="${W}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)"/><text class="eixo" x="${esq - 4}" y="${y(t) + 3}" text-anchor="end">${fmt(t)}</text>`).join('');
+  const marcas = pts.map((p, k) => (p ? `<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="${cheio[k] ? COR_FIXA : 'var(--card)'}" stroke="${COR_FIXA}" stroke-width="2"/>` : '')).join('');
+  return grafico(id, W, H, rotulo, alvos(esq, larg, n, H) + eixos + `<path d="${traco}" fill="none" stroke="${COR_FIXA}" stroke-width="2"/>` + marcas
+    + rot.map((r, k) => rotX(r, esq + k * larg + larg / 2, H - 6)).join(''));
+}
+
+// Mapa de calor: uma linha por categoria, uma coluna por mês; azul mais escuro onde gastou mais (uma cor só, claro para escuro).
+const corCalor = t => {
+  if (t <= 0) return '#eef1f6';
+  const a = [226, 233, 251], b = [30, 63, 145], k = 0.12 + 0.88 * t;
+  return `rgb(${a.map((x, i) => Math.round(x + (b[i] - x) * k)).join(',')})`;
+};
+function grafCalor(id, cats, meses, val, rotulo) {
+  const W = 340, esq = 98, cw = (W - esq) / meses.length, ch = 20, H = cats.length * ch + 18;
+  const max = Math.max(1, ...cats.flatMap(c => meses.map(ms => val(c, ms))));
+  const dicas = [];
+  let g = '';
+  cats.forEach((c, r) => {
+    const nome = c.length > 17 ? c.slice(0, 16) + '…' : c;
+    g += `<text class="eixo" x="${esq - 6}" y="${r * ch + ch / 2 + 3}" text-anchor="end">${esc(nome)}</text>`;
+    meses.forEach((ms, k) => {
+      const v = val(c, ms);
+      g += `<rect class="cel" data-k="${dicas.length}" x="${esq + k * cw + 1}" y="${r * ch + 1}" width="${cw - 2}" height="${ch - 2}" rx="3" fill="${corCalor(v / max)}"/>`;
+      dicas.push(`<b>${esc(c)}</b><br>${esc(nomeMes(ms))}: ${m(v)}`);
+    });
+  });
+  rotMeses(meses).forEach((r, k) => (g += rotX(r, esq + k * cw + cw / 2, H - 4)));
+  st.dicas[id] = dicas;
+  return grafico(id, W, H, rotulo, g);
+}
+
+// Lista com barra de proporção, sem ícone (estabelecimentos, diferenças).
+const listaBarras = l => {
+  const max = Math.max(1, ...l.map(x => Math.abs(x.v)));
+  return `<div class="grade">${l.map(x => `<div class="g sem-ico"><span class="nome">${esc(x.nome)}${x.sub ? `<br><small>${esc(x.sub)}</small>` : ''}</span><b class="${x.cls || ''}">${x.txt || m(x.v)}</b>
+    <span class="barra-cat"><i style="width:${(100 * Math.abs(x.v) / max).toFixed(1)}%;${x.cor ? 'background:' + x.cor : ''}"></i></span></div>`).join('')}</div>`;
+};
+
+function telaResumo() {
+  const sec = SECOES.includes(st.secResumo) ? st.secResumo : 'Geral', ano = anoResumo();
+  st.dicas = {};
+  const corpo = { Geral: resGeral, Pessoas: resPessoas, Categorias: resCategorias, 'Cartão': resCartao, Parcelas: resParcelas, 'Dólar': resDolar }[sec](ano);
+  return `<div class="chips secoes">${SECOES.map(s => `<button class="chip ${s === sec ? 'on' : ''}" data-sec="${s}">${s}</button>`).join('')}</div>` + corpo;
+}
+
+function resGeral(ano) {
+  const serie = serieAno(ano), meses = serie.map(s => s.mes), rot = rotMeses(meses), atual = st.hoje.slice(0, 7);
+  const rec = serie.reduce((t, s) => t + s.rec, 0), desp = serie.reduce((t, s) => t + s.desp, 0);
+  const desps = st.itens.filter(i => i.tipo === 'Despesa' && i.mes.startsWith(ano) && doFiltro(i));
+  const fixa = meses.map(ms => somaBRL(desps.filter(i => i.mes === ms && i.origem !== 'extra')));
+  const avulsa = meses.map(ms => somaBRL(desps.filter(i => i.mes === ms && i.origem === 'extra')));
+  const tf = fixa.reduce((a, b) => a + b, 0), ta = avulsa.reduce((a, b) => a + b, 0);
+  const passados = meses.filter(ms => ms <= atual);
+  const dif = passados.map(ms => desps.filter(i => i.mes === ms).reduce((t, i) => t + (Number(i.valor_brl) || 0) - previstoBRL(i), 0));
+  const porItem = {};
+  desps.filter(i => i.mes <= atual).forEach(i => {
+    const k = i.item, d = porItem[k] || (porItem[k] = { prev: 0, real: 0 });
+    d.prev += previstoBRL(i); d.real += Number(i.valor_brl) || 0;
+  });
+  const difs = Object.entries(porItem).map(([nome, d]) => ({ nome, v: d.real - d.prev, d })).filter(x => Math.abs(x.v) >= 1)
+    .sort((a, b) => Math.abs(b.v) - Math.abs(a.v)).slice(0, 6);
+  const tPrev = desps.filter(i => i.mes <= atual).reduce((t, i) => t + previstoBRL(i), 0), tReal = somaBRL(desps.filter(i => i.mes <= atual));
+  let h = `
+    <div class="card"><div class="tiles">
+      <div><small>Receitas</small><b class="verde">${m(rec)}</b></div>
+      <div><small>Despesas</small><b class="vermelho">${m(desp)}</b></div>
+      <div><small>Saldo do ano</small><b class="${rec - desp < 0 ? 'vermelho' : ''}">${m(rec - desp)}</b></div>
+    </div></div>
+    <div class="card"><h2>Receitas e despesas</h2>${legenda([['Receitas', COR_REC], ['Despesas', COR_DESP]])}${graficoMeses(serie)}</div>
+    <div class="card"><h2>Saldo de cada mês</h2>${grafDiverg('gSaldo', rot, serie.map(s => s.saldo), COR_REC, COR_DESP, serie.map(dicaMes), 'Saldo de cada mês')}</div>
+    <div class="card"><h2>Mês a mês</h2>
+      <table class="anual"><thead><tr><th>Mês</th><th>Receitas</th><th>Despesas</th><th>Saldo</th><th>Acum.</th></tr></thead><tbody>
+      ${serie.map(s => `<tr data-mes="${s.mes}" class="${s.mes === atual ? 'atual' : ''}"><td>${MESES[Number(s.mes.slice(5)) - 1].slice(0, 3)}</td><td>${milhar(s.rec)}</td><td>${milhar(s.desp)}</td>
+        <td class="${s.saldo < 0 ? 'vermelho' : ''}">${milhar(s.saldo)}</td><td class="${s.acum < 0 ? 'vermelho' : ''}">${milhar(s.acum)}</td></tr>`).join('')}
+      </tbody><tfoot><tr><td>Ano</td><td>${milhar(rec)}</td><td>${milhar(desp)}</td><td class="${rec - desp < 0 ? 'vermelho' : ''}">${milhar(rec - desp)}</td><td></td></tr></tfoot></table>
+      <div class="aviso">Valores em reais, sem centavos. Toque num mês para abrir. O acumulado soma os saldos a partir de janeiro; não é o saldo das contas.</div></div>
+    <div class="card"><h2>Despesas fixas e avulsas</h2>
+      <div class="aviso" style="margin:-6px 0 4px">Fixas (recorrentes) ${m(tf)} (${pct(tf, tf + ta)}). Avulsas ${m(ta)} (${pct(ta, tf + ta)}).</div>
+      ${legenda([['Fixas', COR_FIXA], ['Avulsas', COR_AVULSA]])}
+      ${grafPilha('gFixas', rot, [{ cor: COR_FIXA, vals: fixa }, { cor: COR_AVULSA, vals: avulsa }],
+        meses.map((ms, k) => `<b>${esc(nomeMes(ms))}</b><br>Fixas ${m(fixa[k])}<br>Avulsas ${m(avulsa[k])}`), 'Despesas fixas e avulsas por mês')}</div>`;
+  h += `<div class="card"><h2>Previsto e valor do mês</h2>`;
+  if (!passados.length) h += '<div class="aviso">Ainda não há meses deste ano até hoje.</div>';
+  else h += `<div class="aviso" style="margin:-6px 0 4px">Despesas até ${esc(nomeMes(passados[passados.length - 1]))}: previsto ${m(tPrev)}, valor do mês ${m(tReal)}, diferença ${m(tReal - tPrev)}.</div>
+      ${legenda([['Acima do previsto', COR_DESP], ['Abaixo do previsto', COR_REC]])}
+      ${grafDiverg('gPrev', rotMeses(passados), dif, COR_DESP, COR_REC, passados.map((ms, k) => `<b>${esc(nomeMes(ms))}</b><br>${dif[k] >= 0 ? 'Acima' : 'Abaixo'} do previsto: ${m(Math.abs(dif[k]))}`), 'Diferença entre valor do mês e previsto')}
+      ${difs.length ? `<div class="bloco">Maiores diferenças no ano</div>${listaBarras(difs.map(x => ({ nome: x.nome, sub: `previsto ${m(x.d.prev)}, valor do mês ${m(x.d.real)}`, v: x.v, txt: (x.v > 0 ? '+' : '−') + m(Math.abs(x.v)), cls: x.v > 0 ? 'vermelho' : 'verde', cor: x.v > 0 ? COR_DESP : COR_REC })))}` : ''}
+      <div class="aviso">Previsto é o valor padrão da recorrente; valor do mês é o que está gravado (fatura importada, valor corrigido). Meses futuros ficam de fora.</div>`;
+  return h + '</div>';
+}
+
+function resPessoas(ano) {
+  const pessoas = (st.cad['Pessoas'] || []).filter(p => st.pessoa === 'Todos' || p === st.pessoa);
+  const meses = mesesDoAno(ano), doAno = st.itens.filter(i => i.mes.startsWith(ano));
+  const cor = p => CORES_PESSOA[(st.cad['Pessoas'] || []).indexOf(p) % CORES_PESSOA.length];
+  const linhas = pessoas.map(p => {
+    const l = doAno.filter(i => i.pessoa === p);
+    return { p, rec: somaBRL(l.filter(i => i.tipo === 'Receita')), desp: somaBRL(l.filter(i => i.tipo === 'Despesa')) };
+  });
+  const series = pessoas.map(p => ({ cor: cor(p), vals: meses.map(ms => somaBRL(doAno.filter(i => i.mes === ms && i.pessoa === p && i.tipo === 'Despesa'))) }));
+  const dicas = meses.map((ms, k) => `<b>${esc(nomeMes(ms))}</b>` + pessoas.map((p, j) => `<br>${esc(p)} ${m(series[j].vals[k])}`).join(''));
+  const totDesp = linhas.reduce((t, x) => t + x.desp, 0);
+  let h = `<div class="card"><h2>Por pessoa no ano</h2>
+    <table class="anual"><thead><tr><th>Pessoa</th><th>Receitas</th><th>Despesas</th><th>Saldo</th><th>Desp. %</th></tr></thead><tbody>
+    ${linhas.map(x => `<tr><td><span class="ponto" style="background:${cor(x.p)}"></span> ${esc(x.p)}</td><td>${milhar(x.rec)}</td><td>${milhar(x.desp)}</td>
+      <td class="${x.rec - x.desp < 0 ? 'vermelho' : ''}">${milhar(x.rec - x.desp)}</td><td>${pct(x.desp, totDesp)}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="aviso">Gerais são as contas da casa; GP é a empresa. Valores em reais, sem centavos.</div></div>
+    <div class="card"><h2>Despesas por pessoa, mês a mês</h2>${legenda(pessoas.map(p => [p, cor(p)]))}
+    ${grafPilha('gPessoas', rotMeses(meses), series, dicas, 'Despesas por pessoa por mês')}</div>`;
+  pessoas.forEach(p => {
+    const porCat = {};
+    doAno.filter(i => i.pessoa === p && i.tipo === 'Despesa').forEach(i => { const c = i.categoria || 'Outros'; porCat[c] = (porCat[c] || 0) + (Number(i.valor_brl) || 0); });
+    const cats = Object.entries(porCat).filter(c => c[1] > 0.005).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    if (cats.length) h += `<div class="card"><h2><span><span class="ponto" style="background:${cor(p)}"></span> ${esc(p)}: maiores categorias</span></h2>${htmlGrade(cats)}</div>`;
+  });
+  return h;
+}
+
+function resCategorias(ano) {
+  const meses = mesesDoAno(ano), desps = st.itens.filter(i => i.tipo === 'Despesa' && i.mes.startsWith(ano) && doFiltro(i));
+  const porCat = {};
+  desps.forEach(i => { const c = i.categoria || 'Outros'; porCat[c] = (porCat[c] || 0) + (Number(i.valor_brl) || 0); });
+  const cats = Object.entries(porCat).filter(c => c[1] > 0.005).sort((a, b) => b[1] - a[1]);
+  if (!cats.length) return '<p class="vazio">Sem despesas neste ano.</p>';
+  const val = (c, ms) => somaBRL(desps.filter(i => i.mes === ms && (i.categoria || 'Outros') === c));
+  return `<div class="card"><h2>Categoria e mês</h2><div class="aviso" style="margin:-6px 0 6px">Quanto mais escuro, mais gasto. Toque num quadrado para ver o valor.</div>
+      ${grafCalor('gCalor', cats.map(c => c[0]), meses, val, 'Despesas por categoria e mês')}</div>
+    <div class="card"><h2>Despesas do ano por categoria</h2>${htmlGrade(cats)}</div>`;
+}
+
+// Estabelecimento: nome conhecido quando bate; senão a descrição sem prefixo de maquininha ("DL *", "IFD*").
+const MARCAS = [[/uber/i, 'Uber'], [/ifood|ifd\*/i, 'iFood'], [/amazon/i, 'Amazon'], [/booking/i, 'Booking'], [/smiles/i, 'Smiles'], [/apple\.com/i, 'Apple'],
+  [/google|youtube/i, 'Google/YouTube'], [/netflix/i, 'Netflix'], [/spotify/i, 'Spotify'], [/shopee/i, 'Shopee'], [/mercado ?livre|mlp\*/i, 'Mercado Livre'],
+  [/latam/i, 'Latam'], [/gol linhas/i, 'Gol'], [/azul linhas/i, 'Azul'], [/drogasil|droga ?raia|drogaria/i, 'Farmácia'], [/playstation/i, 'PlayStation'],
+  [/samsung/i, 'Samsung'], [/netshoes/i, 'Netshoes'], [/botafogo|sociotorcedor/i, 'Botafogo']];
+const marcaDe = d => { const k = MARCAS.find(x => x[0].test(d)); return k ? k[1] : d.replace(/^[a-z]{1,4}\s*\*\s*/i, '').trim().split(/\s+/).slice(0, 3).join(' '); };
+
+function resCartao(ano) {
+  const lancs = new Map(st.itens.filter(i => i.mes.startsWith(ano) && doFiltro(i)).map(i => [i.id, i]));
+  const compras = (st.compras || []).filter(c => lancs.has(c.lanc_id));
+  if (!compras.length) return '<div class="card"><p class="vazio">Nenhuma fatura importada neste ano para esse filtro.</p></div>';
+  const g = {};
+  compras.filter(c => c.tipo === 'compra' || c.tipo === 'estorno').forEach(c => {
+    const k = marcaDe(c.descricao), x = g[k] || (g[k] = { v: 0, n: 0 }); x.v += Number(c.valor); x.n += c.tipo === 'compra' ? 1 : 0;
+  });
+  const top = Object.entries(g).map(([nome, x]) => ({ nome, v: x.v, sub: `${x.n} ${x.n === 1 ? 'compra' : 'compras'}` })).filter(x => x.v > 0.005).sort((a, b) => b.v - a.v).slice(0, 10);
+  const faturas = [...new Set(compras.map(c => c.lanc_id))].map(id => lancs.get(id)).sort((a, b) => a.mes.localeCompare(b.mes) || a.item.localeCompare(b.item));
+  return `<div class="card"><h2>Onde mais gastou</h2><div class="aviso" style="margin:-6px 0 4px">Compras das faturas importadas no ano, somadas por estabelecimento.</div>${listaBarras(top.map(x => Object.assign(x, { cor: COR_FIXA })))}</div>
+    <div class="card"><h2>Compras por categoria</h2>${htmlGrade(gradeCategorias(compras))}</div>
+    <div class="card"><h2>Faturas importadas (${faturas.length})</h2><div class="lista">${faturas.map(linha).join('')}</div></div>`;
+}
+
+// Parcelas daqui para frente: o que tem número de parcela, em aberto, do mês atual em diante (não depende do ano escolhido).
+function resParcelas() {
+  const atual = mesAtual();
+  const abertas = st.itens.filter(i => i.tipo === 'Despesa' && /^\d+\/\d+$/.test(String(i.parcela)) && !i.pago && i.mes >= atual && doFiltro(i));
+  if (!abertas.length) return '<div class="card"><p class="vazio">Nenhuma parcela em aberto daqui para frente.</p></div>';
+  const meses = st.meses.filter(ms => ms >= atual && ms <= abertas.reduce((a, i) => (i.mes > a ? i.mes : a), atual));
+  const porMes = meses.map(ms => somaBRL(abertas.filter(i => i.mes === ms)));
+  const grupos = {};
+  abertas.forEach(i => { const k = i.origem !== 'extra' ? i.origem : i.item; (grupos[k] = grupos[k] || []).push(i); });
+  const lista = Object.values(grupos).map(l => {
+    l.sort((a, b) => a.mes.localeCompare(b.mes));
+    const [p1, tot] = String(l[0].parcela).split('/').map(Number);
+    return { nome: l[0].item, fim: l[l.length - 1].mes, mensal: Number(l[l.length - 1].valor_brl) || 0, resto: somaBRL(l), sub: `parcela ${p1} de ${tot}, termina em ${mesCurto(l[l.length - 1].mes)}` };
+  }).sort((a, b) => a.fim.localeCompare(b.fim) || b.resto - a.resto);
+  const total = porMes.reduce((a, b) => a + b, 0);
+  const rot = meses.map(ms => ({ txt: MESES[Number(ms.slice(5)) - 1][0], atual: ms === st.hoje.slice(0, 7) }));
+  return `<div class="card"><div class="tiles">
+      <div><small>Falta pagar</small><b>${m(total)}</b></div>
+      <div><small>Em ${esc(MESES[Number(atual.slice(5)) - 1].toLowerCase())}</small><b>${m(porMes[0])}</b></div>
+      <div><small>Última parcela</small><b>${esc(mesCurto(meses[meses.length - 1]))}</b></div>
+    </div></div>
+    <div class="card"><h2>Parcelas por mês</h2>
+      ${grafPilha('gParc', rot, [{ cor: COR_FIXA, vals: porMes }], meses.map((ms, k) => `<b>${esc(nomeMes(ms))}</b><br>Parcelas ${m(porMes[k])}`), 'Parcelas em aberto por mês')}
+      <div class="aviso">De ${esc(nomeMes(meses[0]))} a ${esc(nomeMes(meses[meses.length - 1]))}. Só entra o que tem número de parcela; dívidas contínuas (sem parcela) e parcelas dentro das faturas de cartão ficam de fora.</div></div>
+    <div class="card"><h2>Cada parcelamento (${lista.length})</h2>${listaBarras(lista.map(x => ({ nome: x.nome, sub: `${x.sub}, ${m(x.mensal)} por mês`, v: x.resto, cor: COR_FIXA })))}
+      <div class="aviso">O valor é quanto ainda falta pagar de cada um.</div></div>`;
+}
+
+function resDolar(ano) {
+  const meses = mesesDoAno(ano);
+  const emDolar = st.itens.filter(i => i.tipo === 'Receita' && i.moeda === 'USD' && i.mes.startsWith(ano) && doFiltro(i));
+  if (!emDolar.length) return '<div class="card"><p class="vazio">Nenhuma receita em dólar neste ano para esse filtro.</p></div>';
+  const linhas = meses.map(ms => {
+    const l = emDolar.filter(i => i.mes === ms), dol = l.reduce((t, i) => t + Number(i.valor), 0), reais = somaBRL(l);
+    const real = l.some(i => !segueRef(i));
+    const efeito = l.reduce((t, i) => t + (segueRef(i) ? 0 : Number(i.valor) * (Number(i.cambio) - Number(st.cambios[ms]))), 0);
+    return { ms, dol, reais, cambio: dol ? reais / dol : null, real, efeito };
+  });
+  const comDolar = linhas.filter(x => x.dol);
+  const tDol = comDolar.reduce((t, x) => t + x.dol, 0), tReais = comDolar.reduce((t, x) => t + x.reais, 0), tEf = comDolar.reduce((t, x) => t + x.efeito, 0);
+  const rot = rotMeses(meses);
+  return `<div class="card"><div class="tiles">
+      <div><small>Em dólar</small><b>${st.oculto ? 'US$ ••••' : usd(tDol)}</b></div>
+      <div><small>Em reais</small><b class="verde">${m(tReais)}</b></div>
+      <div><small>Câmbio médio</small><b>${fmtCambio(tReais / tDol)}</b></div>
+    </div></div>
+    <div class="card"><h2>Câmbio de cada mês</h2>
+      ${grafLinha('gDolar', rot, linhas.map(x => x.cambio), linhas.map(x => x.real),
+        linhas.map(x => x.dol ? `<b>${esc(nomeMes(x.ms))}</b><br>US$ ${usd(x.dol).replace('US$ ', '')} a ${fmtCambio(x.cambio)}<br>${m(x.reais)}${x.real ? '<br>câmbio real' : '<br>referência do mês'}` : `<b>${esc(nomeMes(x.ms))}</b><br>sem receita em dólar`),
+        'Câmbio de cada mês', v => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
+      <div class="aviso">Marcador cheio: câmbio real registrado. Vazado: câmbio de referência do mês.</div></div>
+    <div class="card"><h2>Mês a mês</h2>
+      <table class="anual"><thead><tr><th>Mês</th><th>US$</th><th>Câmbio</th><th>R$</th><th>Efeito</th></tr></thead><tbody>
+      ${comDolar.map(x => `<tr data-mes="${x.ms}"><td>${MESES[Number(x.ms.slice(5)) - 1].slice(0, 3)}</td><td>${milhar(x.dol)}</td><td>${fmtCambio(x.cambio)}</td><td>${milhar(x.reais)}</td>
+        <td class="${x.efeito < 0 ? 'vermelho' : x.efeito > 0 ? 'verde' : ''}">${x.real ? milhar(x.efeito) : ''}</td></tr>`).join('')}
+      </tbody><tfoot><tr><td>Ano</td><td>${milhar(tDol)}</td><td>${fmtCambio(tReais / tDol)}</td><td>${milhar(tReais)}</td><td>${milhar(tEf)}</td></tr></tfoot></table>
+      <div class="aviso">Efeito: quanto o câmbio real deu a mais (ou a menos) em reais do que a referência do mês. Mês sem câmbio real fica em branco.</div></div>`;
+}
+
+// Dica ao tocar ou passar o mouse em qualquer gráfico; seções e linhas de tabela.
+function ligarResumo() {
+  document.querySelectorAll('.graf').forEach(g => {
+    const dica = g.querySelector('.dica'), lista = (st.dicas || {})[g.id] || [], alvosG = g.querySelectorAll('[data-k]');
+    const mostrar = el => {
+      alvosG.forEach(a => a.classList.toggle('on', a === el));
+      dica.innerHTML = lista[Number(el.dataset.k)] || '';
+      dica.style.display = 'block';
+      const caixa = g.getBoundingClientRect(), r = el.getBoundingClientRect(), w = dica.offsetWidth;
+      dica.style.left = Math.max(0, Math.min(caixa.width - w, r.left - caixa.left + r.width / 2 - w / 2)) + 'px';
+      dica.style.top = (r.top - caixa.top - 8) + 'px';
+    };
+    alvosG.forEach(el => { el.onpointerenter = () => mostrar(el); el.onclick = () => mostrar(el); });
+    g.onpointerleave = () => { dica.style.display = 'none'; alvosG.forEach(a => a.classList.remove('on')); };
+  });
+  document.querySelectorAll('[data-sec]').forEach(b => (b.onclick = () => { st.secResumo = b.dataset.sec; render(); }));
+  document.querySelectorAll('tr[data-mes]').forEach(tr => (tr.onclick = () => { st.aba = 'principal'; abrirMes(tr.dataset.mes); }));
+}
+
 function novo() {
   const hojeNoMes = st.hoje.slice(0, 7) === st.mes ? st.hoje : st.mes + '-01';
   const opts = (lista, sel) => lista.map(v => `<option ${v === sel ? 'selected' : ''}>${esc(v)}</option>`).join('');
@@ -1173,8 +1539,8 @@ function novo() {
 $('btnNovo').onclick = novo;
 $('btnMais').onclick = mais;
 document.querySelectorAll('[data-aba]').forEach(b => b.onclick = () => { st.aba = b.dataset.aba; render(); window.scrollTo(0, 0); });
-$('ant').onclick = () => abrirMes(st.meses[st.meses.indexOf(st.mes) - 1]);
-$('prox').onclick = () => abrirMes(st.meses[st.meses.indexOf(st.mes) + 1]);
+$('ant').onclick = () => (st.aba === 'resumo' ? trocarAno(-1) : abrirMes(st.meses[st.meses.indexOf(st.mes) - 1]));
+$('prox').onclick = () => (st.aba === 'resumo' ? trocarAno(1) : abrirMes(st.meses[st.meses.indexOf(st.mes) + 1]));
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 if (SESSAO) carregarTudo(); else mostrarLogin();
 </script>
