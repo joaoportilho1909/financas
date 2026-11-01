@@ -1579,9 +1579,13 @@ async function atualizarAvisos(el) {
 // ---------- movimentações e saldos ----------
 
 const TIPOS_MOV = ['Transferência', 'Aplicação', 'Resgate', 'Outro'];
-// Contas conhecidas: as que já aparecem em saldos e movimentações (sugestão no campo, dá para digitar outra).
-const contasConhecidas = () => [...new Set([...(st.saldos || []).map(x => x.conta), ...(st.movs || []).flatMap(x => [x.de, x.para])]
-  .map(x => String(x || '').trim()).filter(x => x && x !== 'Pix'))].sort((a, b) => a.localeCompare(b));
+// Sugestão de conta: primeiro a lista oficial (Cadastros > Contas, na ordem de lá), depois outras já usadas; dá para digitar outra.
+const contasConhecidas = () => {
+  const oficiais = st.cad['Contas'] || [];
+  const usadas = [...(st.saldos || []).map(x => x.conta), ...(st.movs || []).flatMap(x => [x.de, x.para])]
+    .map(x => String(x || '').trim()).filter(x => x && x !== 'Pix' && !oficiais.includes(x)).sort((a, b) => a.localeCompare(b));
+  return [...new Set(oficiais.concat(usadas))];
+};
 // Último saldo de cada conta (data mais recente; no mesmo dia, o lançado por último).
 function saldosAtuais() {
   const u = {};
@@ -1692,7 +1696,7 @@ function novoSaldo() {
       <div class="campo"><label>Data</label><input id="sData" type="date" value="${st.hoje}"></div>
     </div>
     <div class="campo"><label>Observação (opcional)</label><textarea id="sObs" rows="2"></textarea></div>
-    ${`<datalist id="contas">${[...new Set((st.saldos || []).map(x => String(x.conta).trim()).concat(contasConhecidas()))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>`}
+    ${listaContas()}
     <button class="btn pri" id="bSaldoSalvar">Salvar</button>
     <button class="btn" id="bVoltar">Voltar</button>`);
   $('bVoltar').onclick = telaMov;
