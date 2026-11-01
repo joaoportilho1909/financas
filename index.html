@@ -490,7 +490,7 @@ function detalhe(id) {
       <div class="linha2"><input id="vMes" inputmode="decimal" value="${temOverride ? String(i.valor_mes).replace('.', ',') : ''}" placeholder="${String(i.valor_previsto).replace('.', ',')}">
       <button class="btn" id="bValor" style="margin:0">Salvar valor</button></div></div>
 
-    ${IMPORTA_FATURA.includes(i.item) && !receita ? secaoFatura(i) : ''}
+    ${(IMPORTA_FATURA.includes(i.item) || PLUGGY_CARTOES.includes(i.item)) && !receita ? secaoFatura(i) : ''}
 
     <div class="campo"><label>Comprovante</label>
       <div class="links">${links.map((l, n) => `<a href="${esc(l)}" target="_blank">Abrir comprovante${links.length > 1 ? ' ' + (n + 1) : ''}</a>`).join('')}</div>
@@ -541,6 +541,14 @@ function detalhe(id) {
       else previaFatura(i, { banco: 'Nubank', linhas: lerFaturaNubank(await f.text()) }, f.name);
     } catch (err) { erro(err); e.target.value = ''; }
   };
+  if ($('bPluggy')) $('bPluggy').onclick = async e => {
+    e.target.disabled = true; e.target.textContent = 'Buscando na Pluggy…';
+    try {
+      const fat = await call('pluggyFatura', i.id);
+      fat.linhas.forEach(l => { const c = categoriaDe(l.descricao); l.categoria = c === 'Outros' ? CATEGORIAS_PLUGGY[l.categoriaPluggy] || c : c; delete l.categoriaPluggy; });
+      previaFatura(i, fat, 'Pluggy' + (fat.atualizado ? ', atualizada em ' + fat.atualizado : ''));
+    } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Buscar fatura na Pluggy'; }
+  };
   if ($('bExcluir')) $('bExcluir').onclick = async e => {
     if (e.target.dataset.conf !== '1') { e.target.dataset.conf = '1'; e.target.textContent = 'Toque de novo para excluir'; return; }
     e.target.disabled = true;
@@ -584,7 +592,7 @@ const REGRAS = [
   [/supermerc|mercado(?! ?pago| ?livre)|atacad|assai|carrefour|hortifruti|a[cç]ougue|padaria|sacol[aã]o/i, 'Mercado'],
   [/drogasil|drogaria|droga ?raia|farm[aá]c|pague menos|hospital|cl[ií]nica|laborat|odonto|unimed|[oó]tica/i, 'Saúde'],
   [/petz|cobasi|pet ?shop|veterin/i, 'Pets'],
-  [/ifood|rappi|restaurante|buteko|lanchonete|pizzar|burger|cali republic|mangai|sociotorcedor|botafogo|netflix|spotify|disney|hbo|prime video|youtube|cinema|ingresso|sympla|steam|playstation/i, 'Lazer'],
+  [/ifood|rappi|restaurante|buteko|lanchonete|pizzar|burger|cali republic|mangai|sociotorcedor|botafogo|netflix|spotify|disney|hbo|prime video|amazon prime|prime canais|crunchyroll|play pass|globoplay|paramount|deezer|youtube|cinema|ingresso|sympla|steam|playstation/i, 'Lazer'],
   [/escola|faculdade|curso|udemy|alura|livraria/i, 'Educação'],
 ];
 const categoriaDe = d => (REGRAS.find(r => r[0].test(d)) || [0, 'Outros'])[1];
@@ -629,6 +637,16 @@ function lerFaturaNubank(texto) {
 
 // Por enquanto só estes cartões importam fatura (decisão do João, 31/10/2026); o leitor do BB espera a amostra.
 const IMPORTA_FATURA = ['Cartão Nubank João', 'Cartão Nubank Carol', 'Cartão BB'];
+// Cartões que o servidor busca no Meu Pluggy (a ligação com a conexão da Pluggy fica no servidor, PLUGGY_CARTOES).
+const PLUGGY_CARTOES = ['Cartão João C6'];
+// Categoria da Pluggy, usada só quando as regras do app não sabem (Outros).
+const CATEGORIAS_PLUGGY = {
+  'Internet': 'Contas (água/luz/internet)', 'Telecommunications': 'Contas (água/luz/internet)', 'Utilities': 'Contas (água/luz/internet)',
+  'Taxi and ride-hailing': 'Transporte', 'Tolls and in vehicle payment': 'Transporte', 'Gas stations': 'Transporte',
+  'Eating out': 'Lazer', 'Food delivery': 'Lazer', 'Video streaming': 'Lazer', 'Music streaming': 'Lazer', 'Sports goods': 'Lazer', 'Gambling': 'Lazer',
+  'Pharmacy': 'Saúde', 'Gyms and fitness centers': 'Saúde', 'Groceries': 'Mercado', 'Airport and airlines': 'Viagens', 'Accomodation': 'Viagens',
+  'Pet supplies and vet': 'Pets', 'Bookstore': 'Educação', 'Houseware': 'Moradia',
+};
 const comprasDe = id => (st.compras || []).filter(c => c.lanc_id === id);
 // Soma por categoria: compras, IOF e estornos; pagamento antecipado fica de fora.
 function gradeCategorias(cs) {
@@ -653,6 +671,7 @@ function secaoFatura(i) {
     if (pag) h += `<div class="aviso">Pagamentos antecipados na fatura: ${m(pag)}</div>`;
     h += `<details class="compras"><summary>Ver as ${cs.length} linhas (importado por ${esc(quemCurto(cs[0].importado_por))} em ${esc(dataBR(cs[0].importado_em) + ' às ' + String(cs[0].importado_em).slice(11))})</summary>${listaCompras(cs)}</details>`;
   } else h += '<div class="aviso" style="margin-bottom:8px">Nenhuma fatura importada para este mês.</div>';
+  if (PLUGGY_CARTOES.includes(i.item)) return h + `<button class="btn" id="bPluggy">Buscar fatura na Pluggy</button></div>`;
   return h + `<label class="btn">${cs.length ? 'Importar de novo' : 'Importar fatura'} (CSV do Nubank ou PDF do BB)<input type="file" id="arqFatura" accept=".csv,text/csv,.pdf,application/pdf" hidden></label></div>`;
 }
 
@@ -675,7 +694,7 @@ function previaFatura(i, fat, arquivo) {
     <h3>Importar fatura</h3>
     <div class="sub">${esc(i.item)} · ${esc(nomeMes(i.mes))}</div>
     <div class="dados">
-      <span>Arquivo</span><span>${esc(arquivo)}</span>
+      <span>Origem</span><span>${esc(arquivo)}</span>
       <span>Banco</span><span>${esc(fat.banco)}</span>
       ${saldo ? `<span>Saldo anterior</span><span>${brl(saldo)}</span>` : ''}
       <span>Compras</span><span>${linhas.filter(l => l.tipo !== 'pagamento' && l.tipo !== 'saldo').length}, de ${dataBR(datas[0])} a ${dataBR(datas[datas.length - 1])}</span>
@@ -685,7 +704,7 @@ function previaFatura(i, fat, arquivo) {
     </div>
     ${htmlGrade(gradeCategorias(linhas))}
     ${avisos.map(a => `<div class="alerta">${esc(a)}</div>`).join('')}
-    <div class="campo"><label>Valor do mês do cartão (R$). Se o PDF da fatura der outro total, corrija aqui.</label>
+    <div class="campo"><label>Valor do mês do cartão (R$). Se a fatura do banco der outro total, corrija aqui.</label>
       <input id="totFat" inputmode="decimal" value="${total.toFixed(2).replace('.', ',')}"></div>
     <button class="btn pri" id="bImp">Confirmar importação</button>
     <details class="compras"><summary>Ver as ${linhas.length} linhas</summary>${listaCompras(linhas)}</details>
