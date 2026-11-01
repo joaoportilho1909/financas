@@ -645,7 +645,7 @@ function lerFaturaNubank(texto) {
 // Por enquanto só estes cartões importam fatura (decisão do João, 31/10/2026); o leitor do BB espera a amostra.
 const IMPORTA_FATURA = ['Cartão Nubank João', 'Cartão Nubank Carol', 'Cartão BB'];
 // Cartões que o servidor busca no Meu Pluggy (a ligação com a conexão da Pluggy fica no servidor, PLUGGY_CARTOES).
-const PLUGGY_CARTOES = ['Cartão João C6'];
+const PLUGGY_CARTOES = ['Cartão João C6', 'Cartão Nubank João', 'Neon', 'Cartão Santander'];
 // Categoria da Pluggy, usada só quando as regras do app não sabem (Outros).
 const CATEGORIAS_PLUGGY = {
   'Internet': 'Contas (água/luz/internet)', 'Telecommunications': 'Contas (água/luz/internet)', 'Utilities': 'Contas (água/luz/internet)',
@@ -678,8 +678,10 @@ function secaoFatura(i) {
     if (pag) h += `<div class="aviso">Pagamentos antecipados na fatura: ${m(pag)}</div>`;
     h += `<details class="compras"><summary>Ver as ${cs.length} linhas (importado por ${esc(quemCurto(cs[0].importado_por))} em ${esc(dataBR(cs[0].importado_em) + ' às ' + String(cs[0].importado_em).slice(11))})</summary>${listaCompras(cs)}</details>`;
   } else h += '<div class="aviso" style="margin-bottom:8px">Nenhuma fatura importada para este mês.</div>';
-  if (PLUGGY_CARTOES.includes(i.item)) return h + `<button class="btn" id="bPluggy">Buscar fatura na Pluggy</button></div>`;
-  return h + `<label class="btn">${cs.length ? 'Importar de novo' : 'Importar fatura'} (CSV do Nubank ou PDF do BB)<input type="file" id="arqFatura" accept=".csv,text/csv,.pdf,application/pdf" hidden></label></div>`;
+  // Nubank João tem os dois: a Pluggy é mais prática, o CSV traz as linhas exatas da fatura.
+  if (PLUGGY_CARTOES.includes(i.item)) h += `<button class="btn" id="bPluggy">Buscar fatura na Pluggy</button>`;
+  if (IMPORTA_FATURA.includes(i.item)) h += `<label class="btn">${cs.length ? 'Importar de novo' : 'Importar fatura'} (CSV do Nubank ou PDF do BB)<input type="file" id="arqFatura" accept=".csv,text/csv,.pdf,application/pdf" hidden></label>`;
+  return h + '</div>';
 }
 
 // Mostra o que vai ser gravado; só grava ao confirmar.
@@ -1643,6 +1645,7 @@ function telaMov() {
     ${saldos.length ? `<div class="dados">${saldos.map(x => `<span>${esc(x.conta)}</span><span><b>${x.moeda === 'USD' ? (st.oculto ? 'US$ ••••' : usd(x.valor)) : m(x.valor)}</b> <small style="color:var(--muted)">${x.moeda === 'USD' ? '≈ ' + m(emReais(x)) + ', ' : ''}em ${esc(dataBR(String(x.data)))}</small></span>`).join('')}
       <span>Total</span><span><b>${m(total)}</b></span></div>` : '<div class="aviso">Nenhum saldo registrado.</div>'}
     <div class="aviso">Cada conta mostra o último saldo informado, com a data. O total soma esses saldos, mesmo de datas diferentes${temDolar ? `, e converte o saldo em dólar pela referência de ${esc(nomeMes(mesAtual()))} (${fmtCambio(ref)})` : ''}.</div>
+    <button class="btn" id="bPluggySaldos">Buscar saldos na Pluggy</button>
     <button class="btn" id="bNovoSaldo">Atualizar saldo de uma conta</button>
     <div class="bloco">Movimentações</div>
     <button class="btn pri" id="bNovaMov">Nova movimentação</button>
@@ -1653,7 +1656,39 @@ function telaMov() {
   $('bVoltar').onclick = mais;
   $('bNovaMov').onclick = novaMov;
   $('bNovoSaldo').onclick = novoSaldo;
+  $('bPluggySaldos').onclick = async e => {
+    e.target.disabled = true; e.target.textContent = 'Buscando na Pluggy…';
+    try { previaSaldos(await call('pluggySaldos')); }
+    catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Buscar saldos na Pluggy'; }
+  };
   document.querySelectorAll('[data-mov]').forEach(el => (el.onclick = () => detalheMov(el.dataset.mov)));
+}
+
+// Saldos lidos da Pluggy ao lado do último saldo do app; vêm marcados os que mudaram. Só grava os marcados.
+function previaSaldos(lista) {
+  const atuais = Object.fromEntries(saldosAtuais().map(x => [String(x.conta).trim(), x]));
+  const mudou = s => { const a = atuais[s.conta]; return !a || Math.abs(Number(a.valor) - s.valor) >= 0.005; };
+  abrirFolha(`
+    <h3>Saldos da Pluggy</h3>
+    <div class="sub">Marque os que quer gravar. Cada um vira um saldo novo da conta, com a data da última atualização do banco.</div>
+    <details class="compras" open><summary>${lista.length} contas</summary>${lista.map((s, k) => {
+      const a = atuais[s.conta];
+      return `<label><input type="checkbox" data-k="${k}" ${mudou(s) ? 'checked' : ''}><span class="t"><b>${esc(s.conta)}</b><br><small>${a ? 'No app: ' + m(a.valor) + ' em ' + esc(dataBR(String(a.data))) : 'Sem saldo no app'}${mudou(s) ? '' : ', igual'}</small></span><b>${m(s.valor)}</b></label>`;
+    }).join('')}</details>
+    <div class="aviso">A conta corrente do C6 não vem pela Pluggy; continua em "Atualizar saldo de uma conta".</div>
+    <button class="btn pri" id="bSaldosGravar">Gravar saldos marcados</button>
+    <button class="btn" id="bVoltar">Voltar</button>`);
+  $('bVoltar').onclick = telaMov;
+  $('bSaldosGravar').onclick = async e => {
+    const marcados = [...document.querySelectorAll('[data-k]:checked')].map(x => lista[Number(x.dataset.k)]);
+    if (!marcados.length) return toast('Nada marcado');
+    e.target.disabled = true; e.target.textContent = 'Gravando…';
+    try {
+      const novos = await call('registrarSaldos', marcados.map(s => ({ conta: s.conta, valor: s.valor, data: s.data, obs: s.obs, moeda: 'BRL' })));
+      (st.saldos = st.saldos || []).push(...novos);
+      telaMov(); toast(novos.length === 1 ? '1 saldo gravado' : novos.length + ' saldos gravados');
+    } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Gravar saldos marcados'; }
+  };
 }
 
 const listaContas = () => `<datalist id="contas">${contasConhecidas().map(c => `<option value="${esc(c)}">`).join('')}</datalist>`;
