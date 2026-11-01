@@ -178,6 +178,7 @@
   .graf .cel { cursor: pointer; }
   .graf .cel.on { stroke: var(--ink); stroke-width: 1.5; }
   .chips.secoes { flex-wrap: wrap; overflow: visible; }
+  .card.avisos { display: flex; gap: 10px; align-items: center; cursor: pointer; color: var(--acc); font-weight: 600; font-size: 14px; padding: 14px 16px; }
 </style>
 </head>
 <body>
@@ -346,6 +347,7 @@ function render() {
   document.querySelectorAll('.item').forEach(el => el.onclick = () => detalhe(el.dataset.id));
   document.querySelectorAll('[data-ir]').forEach(el => el.onclick = () => { st.aba = 'transacoes'; st.situacao = el.dataset.ir; render(); window.scrollTo(0, 0); });
   if (st.aba === 'resumo') ligarResumo();
+  if ($('cAvisos')) $('cAvisos').onclick = () => atualizarAvisos($('cAvisos'));
   if ($('olho')) $('olho').onclick = () => { st.oculto = !st.oculto; guardar('fin_oculto', st.oculto ? '1' : '0'); render(); };
 }
 
@@ -378,6 +380,8 @@ function telaPrincipal() {
       <div class="linhaprog"><span>Faltam ${m(t.desp - t.pago)}</span><span>${t.abertas.length} ${t.abertas.length === 1 ? 'conta aberta' : 'contas abertas'}</span></div>
       ${t.vencidas.length ? `<div class="alerta" data-ir="A pagar">${t.vencidas.length} ${t.vencidas.length === 1 ? 'conta vencida' : 'contas vencidas'}: ${esc(t.vencidas.map(i => i.item).slice(0, 3).join(', '))}${t.vencidas.length > 3 ? '…' : ''}</div>` : ''}
     </div>`;
+
+  if (precisaAvisos()) h += `<div class="card avisos" id="cAvisos"><span>🔔</span><span>Atualizar os avisos no seu Google Tasks (${contasParaAviso().length} contas)</span></div>`;
 
   const prox = t.abertas.slice().sort((a, b) => (a.vencimento || '9999').localeCompare(b.vencimento || '9999')).slice(0, 4);
   if (prox.length) h += `<div class="card"><h2>Próximos vencimentos <a data-ir="A pagar">Ver todos</a></h2><div class="lista">${prox.map(linha).join('')}</div></div>`;
@@ -840,6 +844,9 @@ function casarExtrato(linhas) {
 function mais() {
   abrirFolha(`
     <h3>Mais</h3>
+    <div class="campo"><label>${st.usuario === DONO ? 'Avisos na véspera do vencimento, na lista Finanças do seu Google Tasks. O servidor atualiza de hora em hora.'
+      : 'Avisos na véspera do vencimento, na lista Finanças do seu Google Tasks. Toque para atualizar.' + (ultimosAvisos() ? ' Última vez: ' + ultimosAvisos() + '.' : '')}</label>
+      <button class="btn" id="bAvisos" style="margin:0">${st.usuario === DONO ? 'Atualizar avisos agora' : 'Atualizar meus avisos'}</button></div>
     <div class="campo"><label>Contas e receitas que se repetem: criar, mudar valor ou dia, encerrar.</label>
       <button class="btn" id="bRecTela" style="margin:0">Recorrentes</button></div>
     <div class="campo"><label>Câmbio real (US$ para R$), referência de cada mês e histórico.</label>
@@ -848,6 +855,7 @@ function mais() {
       <label class="btn">Importar extrato do C6<input type="file" id="arqExtrato" accept=".pdf,application/pdf" hidden></label></div>
     <button class="btn" onclick="fecharFolha()">Fechar</button>`);
   $('bCambioTela').onclick = telaCambio;
+  $('bAvisos').onclick = e => atualizarAvisos(e.target);
   $('bRecTela').onclick = telaRecorrentes;
   $('arqExtrato').onchange = e => {
     const f = e.target.files[0]; if (!f) return;
@@ -1483,6 +1491,86 @@ function ligarResumo() {
   });
   document.querySelectorAll('[data-sec]').forEach(b => (b.onclick = () => { st.secResumo = b.dataset.sec; render(); }));
   document.querySelectorAll('tr[data-mes]').forEach(tr => (tr.onclick = () => { st.aba = 'principal'; abrirMes(tr.dataset.mes); }));
+}
+
+// ---------- avisos no Google Tasks ----------
+// Decisão do João (01/11/2026): aviso na véspera, todas as contas, no Google Tasks de cada um. A lista do dono do script
+// é atualizada pelo servidor de hora em hora; a da Carol, pelo app, quando ela toca (o Google exige o toque para liberar
+// o acesso ao Tasks). Cada tarefa leva "fin:<id>" nas notas; mesma regra do servidor.
+const DONO = 'joaoportilho@gmail.com';
+const API_TASKS = 'https://tasks.googleapis.com/tasks/v1';
+const somaDias = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+function contasParaAviso() {
+  const ate = somaDias(st.hoje, 35), desde = somaDias(st.hoje, -60);
+  return st.itens.filter(o => o.tipo === 'Despesa' && o.pago !== true && Number(o.valor_brl) > 0
+    && /^\d{4}-\d{2}-\d{2}$/.test(String(o.vencimento)) && o.vencimento >= desde && o.vencimento <= ate);
+}
+const tarefaDe = o => ({
+  title: `${o.item}: ${brl(o.valor_brl).replace(/\s/g, ' ')} (vence ${dataBR(o.vencimento)})`,
+  notes: `${o.pessoa}${o.forma_pgto ? ', ' + o.forma_pgto : ''}. Abrir o app: https://joaoportilho1909.github.io/financas/\nfin:${o.id}`,
+  due: somaDias(o.vencimento, -1) + 'T00:00:00.000Z',
+});
+const ultimosAvisos = () => { const t = Number(ler('fin_avisos_em')); return t ? new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''; };
+const precisaAvisos = () => st.usuario !== DONO && Date.now() - (Number(ler('fin_avisos_em')) || 0) > 20 * 3600e3 && contasParaAviso().length > 0;
+
+function tokenTasks() {
+  return new Promise((ok, falha) => {
+    if (!window.google || !google.accounts || !google.accounts.oauth2) return falha(new Error('Login do Google ainda carregando, tente de novo'));
+    google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID, scope: 'https://www.googleapis.com/auth/tasks', hint: st.usuario,
+      callback: r => (r.error ? falha(new Error('Acesso ao Tasks: ' + r.error)) : ok(r.access_token)),
+      error_callback: e => falha(new Error('Acesso ao Tasks: ' + (e.message || e.type))),
+    }).requestAccessToken({ prompt: '' });
+  });
+}
+async function gt(token, metodo, caminho, corpo) {
+  const r = await fetch(API_TASKS + caminho, { method: metodo, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: corpo ? JSON.stringify(corpo) : undefined });
+  if (!r.ok) throw new Error('Google Tasks respondeu ' + r.status);
+  return r.status === 204 ? null : r.json();
+}
+async function sincronizarMeusAvisos() {
+  const token = await tokenTasks();
+  const listas = (await gt(token, 'GET', '/users/@me/lists?maxResults=100')).items || [];
+  const lista = (listas.find(x => x.title === 'Finanças') || (await gt(token, 'POST', '/users/@me/lists', { title: 'Finanças' }))).id;
+  const existentes = [];
+  let pagina = '';
+  do {
+    const r = await gt(token, 'GET', `/lists/${lista}/tasks?showCompleted=true&showHidden=true&maxResults=100${pagina ? '&pageToken=' + pagina : ''}`);
+    (r.items || []).forEach(x => existentes.push(x));
+    pagina = r.nextPageToken || '';
+  } while (pagina);
+  const alvo = Object.fromEntries(contasParaAviso().map(o => [o.id, o])), porId = Object.fromEntries(st.itens.map(o => [o.id, o]));
+  const n = { criadas: 0, atualizadas: 0, concluidas: 0, removidas: 0 };
+  for (const x of existentes) {
+    const mm = String(x.notes || '').match(/fin:(L\d+)/);
+    if (!mm) continue;
+    const id = mm[1], o = alvo[id], l = porId[id];
+    if (!o) {
+      if (l && l.pago === true) { if (x.status !== 'completed') { await gt(token, 'PATCH', `/lists/${lista}/tasks/${x.id}`, { status: 'completed' }); n.concluidas++; } }
+      else if (!l || x.status !== 'completed') { await gt(token, 'DELETE', `/lists/${lista}/tasks/${x.id}`); n.removidas++; }
+      continue;
+    }
+    delete alvo[id];
+    const t = tarefaDe(o);
+    if (x.title !== t.title || String(x.due || '').slice(0, 10) !== t.due.slice(0, 10) || x.notes !== t.notes) { await gt(token, 'PATCH', `/lists/${lista}/tasks/${x.id}`, t); n.atualizadas++; }
+  }
+  for (const o of Object.values(alvo)) { await gt(token, 'POST', `/lists/${lista}/tasks`, tarefaDe(o)); n.criadas++; }
+  guardar('fin_avisos_em', String(Date.now()));
+  return n;
+}
+const resumoAvisos = n => {
+  const p = [[n.criadas, 'criada', 'criadas'], [n.atualizadas, 'atualizada', 'atualizadas'], [n.concluidas, 'concluída', 'concluídas'], [n.removidas, 'removida', 'removidas']]
+    .filter(x => x[0]).map(x => `${x[0]} ${x[0] === 1 ? x[1] : x[2]}`);
+  return p.length ? 'Avisos: ' + p.join(', ') : 'Avisos já estavam em dia';
+};
+async function atualizarAvisos(el) {
+  if (el.dataset.ocupado) return;
+  el.dataset.ocupado = '1'; toast('Atualizando avisos…');
+  try {
+    const n = st.usuario === DONO ? await call('sincronizarAvisos') : await sincronizarMeusAvisos();
+    toast(resumoAvisos(n)); render(); if ($('fundo').classList.contains('on') && $('bAvisos')) mais();
+  } catch (err) { erro(err); }
+  delete el.dataset.ocupado;
 }
 
 function novo() {
