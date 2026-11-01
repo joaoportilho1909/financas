@@ -178,6 +178,13 @@
   .graf .cel { cursor: pointer; }
   .graf .cel.on { stroke: var(--ink); stroke-width: 1.5; }
   .chips.secoes { flex-wrap: wrap; overflow: visible; }
+  .folha .lista { box-shadow: none; border: 1px solid var(--line); }
+  .item.opcao { align-items: flex-start; }
+  .item.opcao .ico { margin-top: 1px; }
+  .item.opcao .sub { white-space: normal; line-height: 1.35; margin: 1px 0 0; }
+  .item.opcao .val { font-size: 14px; display: flex; flex-direction: column; align-items: flex-end; margin-top: 2px; }
+  .item.opcao .val .sub { font-size: 11.5px; margin: 0; }
+  .item .seta { color: var(--muted); font-size: 22px; line-height: 1; align-self: center; margin-left: -4px; }
   .card.avisos { display: flex; gap: 10px; align-items: center; cursor: pointer; color: var(--acc); font-weight: 600; font-size: 14px; padding: 14px 16px; }
 </style>
 </head>
@@ -860,24 +867,32 @@ function casarExtrato(linhas) {
   });
 }
 
+// Cada opção é uma linha como as da lista de lançamentos: ícone, nome, descrição embaixo e um resumo à direita.
 function mais() {
+  const ref = Number(st.cambios[mesAtual()]) || 0;
+  const totalSaldos = saldosAtuais().reduce((t, x) => t + (x.moeda === 'USD' ? Number(x.valor) * ref : Number(x.valor)), 0);
+  const opcao = (id, emoji, bg, nome, desc, val, tag = 'div', extra = '') =>
+    `<${tag} class="item opcao" id="${id}">${`<span class="ico" style="background:${bg}">${emoji}</span>`}<div class="txt"><div class="nome">${nome}</div>
+      <div class="sub">${desc}</div></div>${val ? `<div class="val">${val}</div>` : ''}<span class="seta">›</span>${extra}</${tag}>`;
   abrirFolha(`
     <h3>Mais</h3>
-    <div class="campo"><label>${st.usuario === DONO ? 'Avisos na véspera do vencimento, na lista Finanças do seu Google Tasks. O servidor atualiza de hora em hora.'
-      : 'Avisos na véspera do vencimento, na lista Finanças do seu Google Tasks. Toque para atualizar.' + (ultimosAvisos() ? ' Última vez: ' + ultimosAvisos() + '.' : '')}</label>
-      <button class="btn" id="bAvisos" style="margin:0">${st.usuario === DONO ? 'Atualizar avisos agora' : 'Atualizar meus avisos'}</button></div>
-    <div class="campo"><label>Contas e receitas que se repetem: criar, mudar valor ou dia, encerrar.</label>
-      <button class="btn" id="bRecTela" style="margin:0">Recorrentes</button></div>
-    <div class="campo"><label>Transferências, aplicações e resgates entre contas, e o saldo de cada conta.</label>
-      <button class="btn" id="bMovTela" style="margin:0">Movimentações e saldos</button></div>
-    <div class="campo"><label>Câmbio real (US$ para R$), referência de cada mês e histórico.</label>
-      <button class="btn" id="bCambioTela" style="margin:0">Câmbio</button></div>
-    <div class="campo"><label>Extrato da conta do C6 em PDF, exportado pelo app do banco. O app compara com os lançamentos e marca como pago o que bater, com a data do extrato.</label>
-      <label class="btn">Importar extrato do C6<input type="file" id="arqExtrato" accept=".pdf,application/pdf" hidden></label></div>
+    <div class="bloco">Organizar</div>
+    <div class="lista">
+      ${opcao('bRecTela', '📅', '#e2e9fb', 'Recorrentes', 'Contas e receitas que se repetem: criar, mudar valor ou dia, encerrar.', `${(st.recs || []).filter(recAtiva).length}<span class="sub">ativas</span>`)}
+      ${opcao('bMovTela', '🏦', '#e3f2e9', 'Movimentações e saldos', 'Transferências, aplicações, resgates e o saldo de cada conta.', totalSaldos ? `${m(totalSaldos)}<span class="sub">em contas</span>` : '')}
+      ${opcao('bCambioTela', '💱', '#fdf1cf', 'Câmbio', 'Câmbio real de US$ para R$, referência de cada mês e histórico.', ref ? `${fmtCambio(ref)}<span class="sub">referência</span>` : '')}
+    </div>
+    <div class="bloco">Importar e avisar</div>
+    <div class="lista">
+      ${opcao('bExtrato', '📄', '#e3edf7', 'Importar extrato do C6', 'PDF exportado pelo app do banco. Marca como pago o que bater com os lançamentos, na data do extrato.', '', 'label',
+        '<input type="file" id="arqExtrato" accept=".pdf,application/pdf" hidden>')}
+      ${opcao('bAvisos', '🔔', '#fbe8ef', st.usuario === DONO ? 'Atualizar avisos agora' : 'Atualizar meus avisos',
+        'Véspera do vencimento, na lista Finanças do Google Tasks. ' + (st.usuario === DONO ? 'O servidor também atualiza de hora em hora.' : ultimosAvisos() ? 'Última vez: ' + ultimosAvisos() + '.' : 'Toque para atualizar.'), '')}
+    </div>
     <button class="btn" onclick="fecharFolha()">Fechar</button>`);
   $('bCambioTela').onclick = telaCambio;
   $('bMovTela').onclick = telaMov;
-  $('bAvisos').onclick = e => atualizarAvisos(e.target);
+  $('bAvisos').onclick = () => atualizarAvisos($('bAvisos'));
   $('bRecTela').onclick = telaRecorrentes;
   $('arqExtrato').onchange = e => {
     const f = e.target.files[0]; if (!f) return;
