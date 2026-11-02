@@ -193,6 +193,11 @@
   .item.opcao .val .sub { font-size: 11.5px; margin: 0; }
   .item .seta { color: var(--muted); font-size: 22px; line-height: 1; align-self: center; margin-left: -4px; }
   .card.avisos { display: flex; gap: 10px; align-items: center; cursor: pointer; color: var(--acc); font-weight: 600; font-size: 14px; padding: 14px 16px; }
+  .rapido { display: flex; gap: 8px; align-items: center; padding: 10px; }
+  .rapido input { flex: 1; min-width: 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
+  .rapido button { flex: none; padding: 11px 16px; border: 0; border-radius: 14px; background: linear-gradient(135deg, var(--acc-2), var(--acc));
+    color: #fff; font-weight: 650; cursor: pointer; }
+  .folha .item .sub { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -307,6 +312,8 @@ async function carregarTudo() {
     }
     carregadoEm = Date.now();
     render();
+    // Atalho "Lançar gasto" do ícone (Android) abre com ?rapido=1: já deixa o campo do lançamento rápido em foco.
+    if (/[?&]rapido=1/.test(location.search) && $('rapidoTxt')) { st.aba = 'principal'; $('rapidoTxt').focus(); history.replaceState(null, '', location.pathname); }
   } catch (e) {
     if (!$('botaoGoogle')) $('conteudo').innerHTML = `<div class="erro">Não consegui abrir o banco de dados.<br><small>${esc(e.message || e)}</small></div>`;
   }
@@ -359,6 +366,13 @@ function render() {
   document.querySelectorAll('[data-pessoa]').forEach(b => b.onclick = () => { st.pessoa = b.dataset.pessoa; render(); });
   document.querySelectorAll('[data-sit]').forEach(b => b.onclick = () => { st.situacao = b.dataset.sit; render(); });
   document.querySelectorAll('.item').forEach(el => el.onclick = () => detalhe(el.dataset.id));
+  if ($('rapidoGrupo')) $('rapidoGrupo').onclick = telaRapidos;
+  if ($('rapidoTxt')) {
+    const ir = () => { const v = $('rapidoTxt').value.trim(); if (!v) return $('rapidoTxt').focus(); st.rapidoTxt = v; confirmarRapido(v); };
+    $('rapidoTxt').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); ir(); } };
+    $('rapidoTxt').oninput = e => { st.rapidoTxt = e.target.value; };
+    $('rapidoOk').onclick = ir;
+  }
   document.querySelectorAll('[data-ir]').forEach(el => el.onclick = () => { st.aba = 'transacoes'; st.situacao = el.dataset.ir; render(); window.scrollTo(0, 0); });
   if (st.aba === 'resumo') ligarResumo();
   if ($('cAvisos')) $('cAvisos').onclick = () => atualizarAvisos($('cAvisos'));
@@ -377,8 +391,11 @@ function telaPrincipal() {
   const itens = filtrados();
   const t = totais(itens);
   const saldo = t.rec - t.desp;
-  const pct = t.desp ? Math.round(100 * t.pago / t.desp) : 0;
+  // "Contas do mês" mostra só as contas: os gastos do dia a dia entram no saldo e nas categorias, não no progresso das contas.
+  const tc = totais(itens.filter(i => !ehRapido(i)));
+  const pct = tc.desp ? Math.round(100 * tc.pago / tc.desp) : 0;
   let h = `
+    <div class="card rapido"><input id="rapidoTxt" enterkeyhint="send" autocomplete="off" placeholder="Gasto rápido: bar 16,75 débito c6" value="${esc(st.rapidoTxt || '')}"><button id="rapidoOk">Lançar</button></div>
     <div class="card hero">
       <div class="rot">Saldo do mês <button class="olho" id="olho" aria-label="Mostrar ou esconder valores">${OLHO.replace('{X}', st.oculto ? '<path d="M3 3l18 18"/>' : '')}</button></div>
       <div class="saldo ${saldo < 0 ? 'neg' : ''}">${m(saldo)}</div>
@@ -389,10 +406,10 @@ function telaPrincipal() {
     </div>
     <div class="card">
       <h2>Contas do mês <a data-ir="A pagar">Ver a pagar</a></h2>
-      <div class="linhaprog"><span><b style="color:var(--ink)">${m(t.pago)}</b> pagos</span><span>${pct}%</span></div>
+      <div class="linhaprog"><span><b style="color:var(--ink)">${m(tc.pago)}</b> pagos</span><span>${pct}%</span></div>
       <div class="barraprog"><i style="width:${pct}%"></i></div>
-      <div class="linhaprog"><span>Faltam ${m(t.desp - t.pago)}</span><span>${t.abertas.length} ${t.abertas.length === 1 ? 'conta aberta' : 'contas abertas'}</span></div>
-      ${t.vencidas.length ? `<div class="alerta" data-ir="A pagar">${t.vencidas.length} ${t.vencidas.length === 1 ? 'conta vencida' : 'contas vencidas'}: ${esc(t.vencidas.map(i => i.item).slice(0, 3).join(', '))}${t.vencidas.length > 3 ? '…' : ''}</div>` : ''}
+      <div class="linhaprog"><span>Faltam ${m(tc.desp - tc.pago)}</span><span>${tc.abertas.length} ${tc.abertas.length === 1 ? 'conta aberta' : 'contas abertas'}</span></div>
+      ${tc.vencidas.length ? `<div class="alerta" data-ir="A pagar">${tc.vencidas.length} ${tc.vencidas.length === 1 ? 'conta vencida' : 'contas vencidas'}: ${esc(tc.vencidas.map(i => i.item).slice(0, 3).join(', '))}${tc.vencidas.length > 3 ? '…' : ''}</div>` : ''}
     </div>`;
 
   if (precisaAvisos()) h += `<div class="card avisos" id="cAvisos"><span>🔔</span><span>Atualizar os avisos no seu Google Tasks (${contasParaAviso().length} contas)</span></div>`;
@@ -441,8 +458,13 @@ function telaTransacoes() {
       <div><small style="color:var(--muted)">A pagar</small><br><b>${m(t.desp - t.pago)}</b></div>
     </div>`;
   if (!lista.length) return h + '<p class="vazio">Nada aqui com esses filtros.</p>';
+  // Gastos do lançamento rápido viram uma linha só ("Dia a dia"), que abre a lista deles.
+  const rapidos = lista.filter(ehRapido);
+  if (rapidos.length) h += `<div class="lista" style="margin-top:12px"><div class="item opcao" id="rapidoGrupo"><span class="ico" style="background:#fbe8ef">⚡</span>
+    <div class="txt"><div class="nome">Dia a dia</div><div class="sub">${rapidos.length} ${rapidos.length === 1 ? 'gasto rápido' : 'gastos rápidos'} no mês</div></div>
+    <div class="val">${m(rapidos.reduce((s, i) => s + (Number(i.valor_brl) || 0), 0))}</div><span class="seta">›</span></div></div>`;
   const grupos = [];
-  lista.forEach(i => { const d = i.vencimento || ''; const g = grupos[grupos.length - 1]; if (g && g.d === d) g.itens.push(i); else grupos.push({ d, itens: [i] }); });
+  lista.filter(i => !ehRapido(i)).forEach(i => { const d = i.vencimento || ''; const g = grupos[grupos.length - 1]; if (g && g.d === d) g.itens.push(i); else grupos.push({ d, itens: [i] }); });
   const amanha = new Date(st.hoje + 'T12:00:00'); amanha.setDate(amanha.getDate() + 1);
   const amanhaS = amanha.toISOString().slice(0, 10);
   grupos.forEach(g => {
@@ -1834,6 +1856,139 @@ function novoSaldo() {
       telaMov(); toast('Saldo registrado');
     } catch (err) { erro(err); e.target.disabled = false; e.target.textContent = 'Salvar'; }
   };
+}
+
+// ---------- lançamento rápido ----------
+
+// Uma frase ("bar 16,75 débito c6") vira um gasto avulso já pago, no mês da data. Serve para Pix, débito e dinheiro:
+// compra no cartão entra pela fatura. A conciliação do extrato casa depois pelo valor e pela data.
+// A marca no começo da observação agrupa esses gastos na linha "Dia a dia" das Transações e os tira de "Contas do mês".
+const MARCA_RAPIDO = 'Lançamento rápido';
+const ehRapido = i => String(i.obs || '').startsWith(MARCA_RAPIDO);
+const semAcento = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+// Palavras do dia a dia. Comer fora vai em Lazer (decisão do João em 02/11/2026). Depois delas valem as REGRAS da fatura.
+const PALAVRAS = [
+  [/^(bar|boteco|buteco|cafe|cafezinho|lanche|lanchonete|almoco|jantar|janta|restaurante|pizza|pizzaria|sorvete|acai|cerveja|chope|chopp|hamburguer|burger|pastel|salgado|espetinho|ifood|cinema|show|ingresso)$/, 'Lazer'],
+  [/^(mercado|supermercado|feira|acougue|hortifruti|sacolao|atacadao|assai|padaria|pao|verdurao)$/, 'Mercado'],
+  [/^(uber|taxi|onibus|gasolina|combustivel|etanol|alcool|posto|estacionamento|pedagio|lavajato|mototaxi)$/, 'Transporte'],
+  [/^(farmacia|drogaria|remedio|remedios|medico|consulta|exame|dentista)$/, 'Saúde'],
+  [/^(racao|petshop|veterinario|vet|areia)$/, 'Pets'],
+  [/^(presente|presentes)$/, 'Presentes'],
+];
+const FORMAS_RAPIDO = [[/^pix$/, 'PIX'], [/^(debito|deb)$/, 'Débito'], [/^(dinheiro|especie|cash)$/, 'Dinheiro']];
+const contasRapido = () => (st.cad['Contas'] || []).filter(c => !/investimentos|caixinha|US\$/.test(c));
+// "c6" acha C6; "nubank" ou "nu" acha o Nubank da pessoa; vale a primeira palavra do nome da conta.
+function contaDe(tok, pessoa) {
+  const t = tok === 'nu' ? 'nubank' : tok;
+  const cand = contasRapido().filter(c => semAcento(c).split(/[\s,]+/)[0] === t);
+  return (cand.length > 1 && cand.find(c => semAcento(c).includes(semAcento(pessoa)))) || cand[0] || '';
+}
+const pessoaDoUsuario = () => (st.cad['Pessoas'] || []).find(p => semAcento(p) === (st.usuario === DONO ? 'joao' : 'carol')) || 'Gerais';
+function dataDoToken(t) {
+  if (t === 'hoje') return st.hoje;
+  if (t === 'ontem') return somaDias(st.hoje, -1);
+  if (t === 'anteontem') return somaDias(st.hoje, -2);
+  const x = t.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2}|\d{4}))?$/);
+  if (!x) return '';
+  const ano = x[3] ? (x[3].length === 2 ? '20' + x[3] : x[3]) : st.hoje.slice(0, 4);
+  const d = `${ano}-${x[2].padStart(2, '0')}-${x[1].padStart(2, '0')}`;
+  return !x[3] && d > st.hoje ? `${Number(ano) - 1}${d.slice(4)}` : d;
+}
+
+function lerRapido(txt) {
+  let ult = {};
+  try { ult = JSON.parse(ler('fin_rapido') || '{}') || {}; } catch (e) {}
+  const p = { item: '', valor: NaN, data: st.hoje, forma: '', conta: '', categoria: '', pessoa: pessoaDoUsuario(), cartao: false };
+  const toks = String(txt).trim().split(/\s+/).filter(Boolean);
+  const ehValor = t => /^(r\$)?\d+([.,]\d{3})*([.,]\d{1,2})?$/i.test(t);
+  let kValor = -1, contaTok = '';
+  toks.forEach((t, k) => { if (ehValor(t)) kValor = k; });
+  const resto = [];
+  toks.forEach((t, k) => {
+    const s = semAcento(t);
+    if (k === kValor) { p.valor = numero(t.replace(/^r\$/i, '')); return; }
+    const forma = FORMAS_RAPIDO.find(f => f[0].test(s));
+    if (forma) { p.forma = forma[1]; return; }
+    if (/^(credito|cartao)$/.test(s)) { p.cartao = true; return; }
+    const d = dataDoToken(s);
+    if (d) { p.data = d; return; }
+    const pes = (st.cad['Pessoas'] || []).find(x => semAcento(x) === s);
+    if (pes) { p.pessoa = pes; return; }
+    if (contaDe(s, '')) { contaTok = s; return; }
+    // Nome de categoria define a categoria; se vier primeiro ("mercado 487"), também é o item.
+    const cat = (st.cad['Categorias'] || []).find(c => semAcento(c) === s);
+    if (cat) { p.categoria = cat; if (resto.length) return; }
+    resto.push(t);
+  });
+  p.item = resto.join(' ');
+  p.item = p.item.charAt(0).toUpperCase() + p.item.slice(1);
+  if (contaTok) p.conta = contaDe(contaTok, p.pessoa);
+  if (!p.forma) p.forma = ult.forma || 'PIX';
+  if (!p.conta) p.conta = contasRapido().includes(ult.conta) ? ult.conta : contaDe(st.usuario === DONO ? 'c6' : 'nubank', p.pessoa);
+  if (!p.categoria) {
+    const palavra = resto.map(semAcento).map(w => PALAVRAS.find(r => r[0].test(w))).find(Boolean);
+    p.categoria = palavra ? palavra[1] : categoriaDe(p.item);
+  }
+  return p;
+}
+
+function confirmarRapido(txt) {
+  const p = lerRapido(txt);
+  if (p.cartao) return toast('Compra no cartão entra pela fatura, não aqui');
+  const opts = (lista, sel) => lista.map(v => `<option ${v === sel ? 'selected' : ''}>${esc(v)}</option>`).join('');
+  const formas = (st.cad['Forma Pgto'] || []).filter(f => f !== 'Crédito');
+  abrirFolha(`
+    <h3>Lançar gasto</h3>
+    <div class="sub">Confira e toque em Lançar. Entra como pago, no mês da data.</div>
+    <div class="campo"><label>Item</label><input id="rItem" value="${esc(p.item)}" placeholder="Ex.: Bar"></div>
+    <div class="linha2">
+      <div class="campo"><label>Valor (R$)</label><input id="rValor" inputmode="decimal" value="${isFinite(p.valor) ? p.valor.toFixed(2).replace('.', ',') : ''}" placeholder="0,00"></div>
+      <div class="campo"><label>Data</label><input id="rData" type="date" value="${p.data}"></div>
+    </div>
+    <div class="linha2">
+      <div class="campo"><label>Forma</label><select id="rForma">${opts(formas, p.forma)}</select></div>
+      <div class="campo"><label>Conta</label><select id="rConta">${opts([''].concat(contasRapido()), p.conta)}</select></div>
+    </div>
+    <div class="linha2">
+      <div class="campo"><label>Categoria</label><select id="rCat">${opts(st.cad['Categorias'] || [], p.categoria)}</select></div>
+      <div class="campo"><label>Pessoa</label><select id="rPessoa">${opts(st.cad['Pessoas'] || [], p.pessoa)}</select></div>
+    </div>
+    <button class="btn pri" id="bRapido">Lançar</button>
+    <button class="btn" onclick="fecharFolha()">Cancelar</button>`);
+  $('bRapido').onclick = async e => {
+    const item = $('rItem').value.trim(), valor = numero($('rValor').value), data = $('rData').value;
+    if (!item) return toast('Preencha o item');
+    if (!isFinite(valor) || !(valor > 0)) return toast('Valor inválido');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return toast('Data inválida');
+    const mes = data.slice(0, 7);
+    if (!st.meses.includes(mes)) return toast('Esse mês não está no app: ' + nomeMes(mes));
+    const forma = $('rForma').value, conta = $('rConta').value;
+    e.target.disabled = true;
+    try {
+      const o = await call('criarLancamento', {
+        tipo: 'Despesa', item, valor, moeda: 'BRL', data, mes, pessoa: $('rPessoa').value, forma_pgto: forma,
+        categoria: $('rCat').value, pago: true, obs: MARCA_RAPIDO + (conta ? '. Conta: ' + conta + '.' : '.'),
+      });
+      guardar('fin_rapido', JSON.stringify({ forma, conta }));
+      fecharFolha();
+      st.rapidoTxt = ''; st.mes = o.mes; atualizarItem(o);
+      toast(`Lançado: ${item}, ${brl(valor)}`);
+    } catch (err) { erro(err); e.target.disabled = false; }
+  };
+}
+
+function telaRapidos() {
+  const lista = filtrados().filter(ehRapido).sort((a, b) => (b.vencimento || '').localeCompare(a.vencimento || ''));
+  const total = lista.reduce((s, i) => s + (Number(i.valor_brl) || 0), 0);
+  const grupos = [];
+  lista.forEach(i => { const g = grupos[grupos.length - 1]; if (g && g.d === i.vencimento) g.itens.push(i); else grupos.push({ d: i.vencimento, itens: [i] }); });
+  const rot = d => (d === st.hoje ? 'Hoje' : DIAS[new Date(d + 'T12:00:00').getDay()]) + ` <small>${dataBR(d)}</small>`;
+  abrirFolha(`
+    <h3>Dia a dia</h3>
+    <div class="sub">${lista.length} ${lista.length === 1 ? 'gasto' : 'gastos'} em ${nomeMes(st.mes)}, ${m(total)}</div>
+    ${grupos.map(g => `<div class="dia">${rot(g.d)}</div><div class="lista">${g.itens.map(linha).join('')}</div>`).join('')}
+    <button class="btn" onclick="fecharFolha()">Fechar</button>`);
+  $('folha').querySelectorAll('.item').forEach(el => el.onclick = () => detalhe(el.dataset.id));
 }
 
 function novo() {
