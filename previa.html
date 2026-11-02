@@ -149,6 +149,13 @@
   details.compras label input { width: 20px; height: 20px; flex: none; margin: 2px 0 0; accent-color: var(--acc); }
   .bloco { margin: 12px 0 4px; font-weight: 600; font-size: 14px; }
   details.grupo summary { cursor: pointer; margin: 12px 0 4px; font-weight: 600; font-size: 14px; color: var(--muted); }
+  .bloco small { color: var(--muted); font-weight: 400; font-size: 12.5px; }
+  .item.parc { align-items: flex-start; }
+  .item.parc .sub { white-space: normal; line-height: 1.35; margin-top: 1px; }
+  .item.parc .val { display: flex; flex-direction: column; align-items: flex-end; margin-top: 1px; }
+  .item.parc .val .sub { font-size: 11.5px; margin: 0; }
+  .item .prog { display: block; height: 4px; border-radius: 2px; background: var(--acc-bg); overflow: hidden; margin-top: 6px; }
+  .item .prog i { display: block; height: 100%; background: var(--acc); border-radius: 2px; }
   .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
   .tiles small { display: block; color: var(--muted); font-size: 12px; }
   .tiles b { font-size: 15px; }
@@ -873,7 +880,8 @@ function casarExtrato(linhas) {
 function mais() {
   const ref = Number(st.cambios[mesAtual()]) || 0;
   const totalSaldos = saldosAtuais().reduce((t, x) => t + (x.moeda === 'USD' ? Number(x.valor) * ref : Number(x.valor)), 0);
-  const opcao = (id, emoji, bg, nome, desc, val, tag = 'div', extra = '') =>
+  const parcMes = parcelamentos().reduce((t, p) => t + p.valor, 0);
+  const opcao =(id, emoji, bg, nome, desc, val, tag = 'div', extra = '') =>
     `<${tag} class="item opcao" id="${id}">${`<span class="ico" style="background:${bg}">${emoji}</span>`}<div class="txt"><div class="nome">${nome}</div>
       <div class="sub">${desc}</div></div>${val ? `<div class="val">${val}</div>` : ''}<span class="seta">›</span>${extra}</${tag}>`;
   abrirFolha(`
@@ -883,6 +891,7 @@ function mais() {
       ${opcao('bRecTela', '📅', '#e2e9fb', 'Recorrentes', 'Contas e receitas que se repetem: criar, mudar valor ou dia, encerrar.', `${(st.recs || []).filter(recAtiva).length}<span class="sub">ativas</span>`)}
       ${opcao('bMovTela', '🏦', '#e3f2e9', 'Movimentações e saldos', 'Transferências, aplicações, resgates e o saldo de cada conta.', totalSaldos ? `${m(totalSaldos)}<span class="sub">em contas</span>` : '')}
       ${opcao('bCambioTela', '💱', '#fdf1cf', 'Câmbio', 'Câmbio real de US$ para R$, referência de cada mês e histórico.', ref ? `${fmtCambio(ref)}<span class="sub">referência</span>` : '')}
+      ${opcao('bParcTela', '💳', '#efe6d2', 'Parcelamentos no cartão', 'Compras parceladas das faturas importadas: parcelas pagas, valor e quando acaba.', parcMes ? `${m(parcMes)}<span class="sub">por mês</span>` : '')}
     </div>
     <div class="bloco">Importar e avisar</div>
     <div class="lista">
@@ -896,6 +905,7 @@ function mais() {
   $('bMovTela').onclick = telaMov;
   $('bAvisos').onclick = () => atualizarAvisos($('bAvisos'));
   $('bRecTela').onclick = telaRecorrentes;
+  $('bParcTela').onclick = telaParcelamentos;
   $('arqExtrato').onchange = e => {
     const f = e.target.files[0]; if (!f) return;
     lerPDFcomSenha(f, '', itens => previaExtrato(lerExtratoC6(itens), f.name), mais);
@@ -1074,6 +1084,45 @@ function telaRecorrentes() {
   $('bVoltar').onclick = mais;
   $('bNovaRec').onclick = novaRec;
   document.querySelectorAll('[data-rec]').forEach(el => (el.onclick = () => detalheRec(el.dataset.rec)));
+}
+
+// ---------- parcelamentos no cartão ----------
+
+// Compras com parcela n/N na fatura importada mais recente de cada cartão. Parcela paga = a da fatura (e as seguintes)
+// cujo lançamento do cartão está pago; some quando todas estão pagas.
+function parcelamentos() {
+  const compras = st.compras || [], ult = {};
+  compras.forEach(c => { if (!ult[c.cartao] || c.mes > ult[c.cartao]) ult[c.cartao] = c.mes; });
+  const fatura = (cartao, mes) => st.itens.find(i => i.item === cartao && i.mes === mes);
+  return compras.filter(c => c.tipo === 'compra' && c.mes === ult[c.cartao] && /^\d+\/\d+$/.test(String(c.parcela))).map(c => {
+    const [n, tot] = String(c.parcela).split('/').map(Number);
+    let pagas = n - 1;
+    for (let k = 0; k <= tot - n; k++) { const f = fatura(c.cartao, somaMes(c.mes, k)); if (f && f.pago) pagas++; else break; }
+    return { c, tot, pagas, valor: Number(c.valor) || 0, fim: somaMes(c.mes, tot - n), falta: (tot - pagas) * (Number(c.valor) || 0) };
+  }).filter(p => p.tot > 1 && p.pagas < p.tot);
+}
+
+function telaParcelamentos() {
+  const ps = parcelamentos();
+  const soma = (l, k) => l.reduce((t, p) => t + p[k], 0);
+  let h = `<h3>Parcelamentos no cartão</h3><div class="sub">${ps.length} ${ps.length === 1 ? 'compra em andamento' : 'compras em andamento'}, das faturas importadas</div>`;
+  if (!ps.length) h += '<p class="vazio">Nenhuma compra parcelada em andamento nas faturas importadas.</p>';
+  else {
+    h += `<div class="tiles"><div><small>Por mês</small><b>${m(soma(ps, 'valor'))}</b></div><div><small>Falta pagar</small><b>${m(soma(ps, 'falta'))}</b></div>
+      <div><small>Última parcela</small><b>${esc(mesCurto(ps.reduce((a, p) => (p.fim > a ? p.fim : a), '')))}</b></div></div>`;
+    [...new Set(ps.map(p => p.c.cartao))].sort().forEach(cartao => {
+      const l = ps.filter(p => p.c.cartao === cartao).sort((a, b) => a.fim.localeCompare(b.fim) || b.valor - a.valor);
+      const dono = (st.itens.find(i => i.id === l[0].c.lanc_id) || {}).pessoa;
+      h += `<div class="bloco">${esc(cartao)} <small>${esc([dono, m(soma(l, 'valor')) + ' por mês'].filter(Boolean).join(' · '))}</small></div><div class="lista">${l.map(p => `
+        <div class="item parc" data-fat="${esc(p.c.lanc_id)}">${icone({ categoria: p.c.categoria })}<div class="txt"><div class="nome">${esc(p.c.descricao)}</div>
+          <div class="sub">Paga ${p.pagas} de ${p.tot} · acaba em ${esc(mesCurto(p.fim))}</div><span class="prog"><i style="width:${(100 * p.pagas / p.tot).toFixed(1)}%"></i></span></div>
+          <div class="val">${m(p.valor)}<span class="sub">falta ${m(p.falta)}</span></div></div>`).join('')}</div>`;
+    });
+    h += '<div class="aviso">Parcela paga é a da fatura marcada como paga no app. Só entram cartões com fatura importada; toque numa compra para abrir a fatura.</div>';
+  }
+  abrirFolha(h + '<button class="btn" id="bVoltar">Voltar</button>');
+  $('bVoltar').onclick = mais;
+  document.querySelectorAll('[data-fat]').forEach(el => (el.onclick = () => detalhe(el.dataset.fat)));
 }
 
 function detalheRec(id) {
@@ -1477,7 +1526,7 @@ function resParcelas() {
     </div></div>
     <div class="card"><h2>Parcelas por mês</h2>
       ${grafPilha('gParc', rot, [{ cor: COR_FIXA, vals: porMes }], meses.map((ms, k) => `<b>${esc(nomeMes(ms))}</b><br>Parcelas ${m(porMes[k])}`), 'Parcelas em aberto por mês')}
-      <div class="aviso">De ${esc(nomeMes(meses[0]))} a ${esc(nomeMes(meses[meses.length - 1]))}. Só entra o que tem número de parcela; dívidas contínuas (sem parcela) e parcelas dentro das faturas de cartão ficam de fora.</div></div>
+      <div class="aviso">De ${esc(nomeMes(meses[0]))} a ${esc(nomeMes(meses[meses.length - 1]))}. Só entra o que tem número de parcela; dívidas contínuas (sem parcela) ficam de fora, e as parcelas dentro das faturas de cartão estão em Mais, Parcelamentos no cartão.</div></div>
     <div class="card"><h2>Cada parcelamento (${lista.length})</h2>${listaBarras(lista.map(x => ({ nome: x.nome, sub: `${x.sub}, ${m(x.mensal)} por mês`, v: x.resto, cor: COR_FIXA })))}
       <div class="aviso">O valor é quanto ainda falta pagar de cada um.</div></div>`;
 }
