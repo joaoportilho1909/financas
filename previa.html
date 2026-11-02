@@ -484,7 +484,8 @@ function linha(i) {
   const estado = i.pago ? `<span class="estado ok">✓ ${rec ? 'recebido' : 'pago'}</span>`
     : vencida(i) ? '<span class="estado venc">vencida</span>'
     : i.vencimento ? `<span class="estado ab">${rec ? 'a receber' : 'vence'} ${dataBR(i.vencimento)}</span>` : '';
-  const sub = [i.categoria, i.pessoa, i.parcela].filter(Boolean).join(' · ');
+  const conta = ehRapido(i) ? contaDoRapido(i) : '';
+  const sub = [i.categoria, i.pessoa, i.parcela, conta === CONTA_VA ? 'Vale' : conta].filter(Boolean).join(' · ');
   const valor = i.moeda === 'USD' && !st.oculto ? `${usd(i.valor)}<span class="sub" style="display:block">${brl(i.valor_brl)}</span>` : m(i.valor_brl);
   return `<div class="item ${i.pago ? 'pago' : ''}" data-id="${esc(i.id)}">${icone(i)}
     <div class="txt"><div class="nome">${esc(i.item)}${i.comprovante ? ' 📎' : ''}</div><div class="sub">${esc(sub)}</div></div>
@@ -574,7 +575,7 @@ function detalhe(id) {
     try {
       if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf')
         lerPDFcomSenha(f, '', itens => previaFatura(i, lerFaturaPDF(itens, i.vencimento || i.mes + '-28'), f.name), () => detalhe(i.id));
-      else previaFatura(i, { banco: 'Nubank', linhas: lerFaturaNubank(await f.text()) }, f.name);
+      else previaFatura(i, faturaNubank(i, lerFaturaNubank(await f.text())), f.name);
     } catch (err) { erro(err); e.target.value = ''; }
   };
   if ($('bPluggy')) $('bPluggy').onclick = async e => {
@@ -671,6 +672,26 @@ function lerFaturaNubank(texto) {
   return linhas;
 }
 
+// O CSV do Nubank não traz o saldo da fatura anterior, mas traz o pagamento dela quando cai dentro do ciclo
+// (Carol, nov/2026: R$ 7.922,64 em 07/10 pagou a fatura de outubro). Para o Nubank, total = saldo anterior - pagamentos + compras.
+// Pagamento até o vencimento da fatura anterior, ou de valor igual ao dela, é da fatura anterior: entra uma linha "saldo"
+// de mesmo valor, positiva, que anula esse pagamento no total. Pagamento depois do vencimento é antecipação desta fatura.
+function faturaNubank(i, linhas) {
+  const [a, mm] = i.mes.split('-').map(Number);
+  const mesAnt = mm === 1 ? `${a - 1}-12` : `${a}-${String(mm - 1).padStart(2, '0')}`;
+  const ant = st.itens.find(x => x.item === i.item && x.mes === mesAnt);
+  const avisos = [];
+  if (!ant) return { banco: 'Nubank', linhas, avisos };
+  const valAnt = Number(ant.valor_brl) || 0;
+  const daAnterior = linhas.filter(l => l.tipo === 'pagamento' &&
+    ((ant.vencimento && l.data <= ant.vencimento) || Math.abs(Math.abs(l.valor) - valAnt) < 0.011));
+  if (!daAnterior.length) return { banco: 'Nubank', linhas, avisos };
+  const pago = -Math.round(daAnterior.reduce((s, l) => s + l.valor, 0) * 100) / 100;
+  if (Math.abs(pago - valAnt) > 0.01) avisos.push(`O pagamento da fatura anterior (${brl(pago)}) é diferente do valor dela no app (${brl(valAnt)}). Confira.`);
+  const datas = daAnterior.map(l => dataBR(l.data)).join(', ');
+  return { banco: 'Nubank', avisos, linhas: [{ data: daAnterior[0].data, descricao: `Saldo da fatura anterior (paga em ${datas})`, parcela: '', tipo: 'saldo', categoria: '', valor: pago }].concat(linhas) };
+}
+
 // Por enquanto só estes cartões importam fatura (decisão do João, 31/10/2026); o leitor do BB espera a amostra.
 const IMPORTA_FATURA = ['Cartão Nubank João', 'Cartão Nubank Carol', 'Cartão BB'];
 // Cartões que o servidor busca no Meu Pluggy (a ligação com a conexão da Pluggy fica no servidor, PLUGGY_CARTOES).
@@ -701,10 +722,16 @@ function listaCompras(cs) {
 function secaoFatura(i) {
   const cs = comprasDe(i.id);
   const pag = cs.filter(c => c.tipo === 'pagamento').reduce((s, c) => s + Number(c.valor), 0);
+  const sal = cs.filter(c => c.tipo === 'saldo').reduce((s, c) => s + Number(c.valor), 0);
+  // Pagamento que só quita o saldo anterior não é antecipação: antecipado é o que passa dele.
+  const quitaAnterior = sal > 0 && pag <= -sal + 0.01;
+  const antecipado = quitaAnterior ? pag + sal : pag;
   let h = '<div class="campo"><label>Fatura por categoria</label>';
   if (cs.length) {
     h += htmlGrade(gradeCategorias(cs));
-    if (pag) h += `<div class="aviso">Pagamentos antecipados na fatura: ${m(pag)}</div>`;
+    if (quitaAnterior) h += `<div class="aviso">Fatura anterior (${m(sal)}) paga dentro deste ciclo: não entra no total.</div>`;
+    else if (sal) h += `<div class="aviso">Saldo anterior na fatura: ${m(sal)}</div>`;
+    if (antecipado < -0.005) h += `<div class="aviso">Pagamentos antecipados na fatura: ${m(antecipado)}</div>`;
     h += `<details class="compras"><summary>Ver as ${cs.length} linhas (importado por ${esc(quemCurto(cs[0].importado_por))} em ${esc(dataBR(cs[0].importado_em) + ' às ' + String(cs[0].importado_em).slice(11))})</summary>${listaCompras(cs)}</details>`;
   } else h += '<div class="aviso" style="margin-bottom:8px">Nenhuma fatura importada para este mês.</div>';
   // Nubank João tem os dois: a Pluggy é mais prática, o CSV traz as linhas exatas da fatura.
@@ -1876,7 +1903,11 @@ const PALAVRAS = [
   [/^(presente|presentes)$/, 'Presentes'],
 ];
 const FORMAS_RAPIDO = [[/^pix$/, 'PIX'], [/^(debito|deb)$/, 'Débito'], [/^(dinheiro|especie|cash)$/, 'Dinheiro']];
-const contasRapido = () => (st.cad['Contas'] || []).filter(c => !/investimentos|caixinha|US\$/.test(c));
+// Vale-alimentação da Carol: "vl", "va" ou "vale" na frase. Conta só da tela (não está em Cadastros), com o mesmo nome
+// da receita recorrente; o gasto vira despesa contra essa receita, e a lista "Dia a dia" mostra quanto já foi usado.
+const CONTA_VA = 'Vale-alimentação Carol';
+const contasRapido = () => (st.cad['Contas'] || []).filter(c => !/investimentos|caixinha|US\$/.test(c)).concat(CONTA_VA);
+const contaDoRapido = i => (String(i.obs || '').match(/Conta: ([^.]+)\./) || [])[1] || '';
 // "c6" acha C6; "nubank" ou "nu" acha o Nubank da pessoa; vale a primeira palavra do nome da conta.
 function contaDe(tok, pessoa) {
   const t = tok === 'nu' ? 'nubank' : tok;
@@ -1910,6 +1941,7 @@ function lerRapido(txt) {
     const forma = FORMAS_RAPIDO.find(f => f[0].test(s));
     if (forma) { p.forma = forma[1]; return; }
     if (/^(credito|cartao)$/.test(s)) { p.cartao = true; return; }
+    if (/^(vl|va|vale)$/.test(s)) { p.conta = CONTA_VA; p.forma = 'Outro'; return; }
     const d = dataDoToken(s);
     if (d) { p.data = d; return; }
     const pes = (st.cad['Pessoas'] || []).find(x => semAcento(x) === s);
@@ -1924,7 +1956,7 @@ function lerRapido(txt) {
   p.item = p.item.charAt(0).toUpperCase() + p.item.slice(1);
   if (contaTok) p.conta = contaDe(contaTok, p.pessoa);
   if (!p.forma) p.forma = ult.forma || 'PIX';
-  if (!p.conta) p.conta = contasRapido().includes(ult.conta) ? ult.conta : contaDe(st.usuario === DONO ? 'c6' : 'nubank', p.pessoa);
+  if (!p.conta) p.conta = contasRapido().includes(ult.conta) && ult.conta !== CONTA_VA ? ult.conta : contaDe(st.usuario === DONO ? 'c6' : 'nubank', p.pessoa);
   if (!p.categoria) {
     const palavra = resto.map(semAcento).map(w => PALAVRAS.find(r => r[0].test(w))).find(Boolean);
     p.categoria = palavra ? palavra[1] : categoriaDe(p.item);
@@ -1969,7 +2001,8 @@ function confirmarRapido(txt) {
         tipo: 'Despesa', item, valor, moeda: 'BRL', data, mes, pessoa: $('rPessoa').value, forma_pgto: forma,
         categoria: $('rCat').value, pago: true, obs: MARCA_RAPIDO + (conta ? '. Conta: ' + conta + '.' : '.'),
       });
-      guardar('fin_rapido', JSON.stringify({ forma, conta }));
+      // O vale não vira o padrão dos próximos lançamentos (café no vale é exceção, não regra).
+      if (conta !== CONTA_VA) guardar('fin_rapido', JSON.stringify({ forma, conta }));
       fecharFolha();
       st.rapidoTxt = ''; st.mes = o.mes; atualizarItem(o);
       toast(`Lançado: ${item}, ${brl(valor)}`);
@@ -1983,9 +2016,15 @@ function telaRapidos() {
   const grupos = [];
   lista.forEach(i => { const g = grupos[grupos.length - 1]; if (g && g.d === i.vencimento) g.itens.push(i); else grupos.push({ d: i.vencimento, itens: [i] }); });
   const rot = d => (d === st.hoje ? 'Hoje' : DIAS[new Date(d + 'T12:00:00').getDay()]) + ` <small>${dataBR(d)}</small>`;
+  // Vale do mês: soma o que foi lançado no vale (de qualquer pessoa) contra a receita do vale no mês.
+  const doMes = st.itens.filter(i => i.mes === st.mes);
+  const vaUsado = doMes.filter(i => ehRapido(i) && contaDoRapido(i) === CONTA_VA).reduce((s, i) => s + (Number(i.valor_brl) || 0), 0);
+  const vaRec = doMes.filter(i => i.tipo === 'Receita' && i.item === CONTA_VA).reduce((s, i) => s + (Number(i.valor_brl) || 0), 0);
+  const vaLinha = vaUsado || vaRec ? `<div class="aviso" style="margin:-4px 0 8px">Vale-alimentação da Carol: ${m(vaUsado)} usados${vaRec ? ` de ${m(vaRec)}, sobram ${m(vaRec - vaUsado)}` : ''}</div>` : '';
   abrirFolha(`
     <h3>Dia a dia</h3>
     <div class="sub">${lista.length} ${lista.length === 1 ? 'gasto' : 'gastos'} em ${nomeMes(st.mes)}, ${m(total)}</div>
+    ${vaLinha}
     ${grupos.map(g => `<div class="dia">${rot(g.d)}</div><div class="lista">${g.itens.map(linha).join('')}</div>`).join('')}
     <button class="btn" onclick="fecharFolha()">Fechar</button>`);
   $('folha').querySelectorAll('.item').forEach(el => el.onclick = () => detalhe(el.dataset.id));
